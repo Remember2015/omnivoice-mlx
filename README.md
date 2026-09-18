@@ -95,7 +95,7 @@ docs/                 # 研究记录
 
 | 内容 | 许可 |
 |---|---|
-| 本仓库代码 | Apache-2.0，同上游（`LICENSE`、`NOTICE`） |
-| `omnivoice_mlx/higgs/` | MIT，vendor 自 [mlx-audio](https://github.com/Blaizzy/mlx-audio)（`THIRD-PARTY-LICENSES.md`） |
+| 本仓库代码 | Apache-2.0，同上游 |
+| `omnivoice_mlx/higgs/` | MIT，vendor 自 [mlx-audio](https://github.com/Blaizzy/mlx-audio) |
 | 模型权重 | **CC-BY-NC**，非商用、需署名 |
 | Higgs codec 权重 | Boson Higgs Audio 2 Community License |
