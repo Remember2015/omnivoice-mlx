@@ -14,7 +14,7 @@ CER、speaker similarity、UTMOS 分别用 Fun-ASR-Nano、CAM++、UTMOS22-strong
 
 本项目，8-bit + fp16，列名是 `SamplerConfig` 的参数（`cache_refresh=0` 表示不用 KV cache）：
 
-| num_steps | cache_refresh | uncond_every | RTF 短句 | 整句延迟 | CER | sim | UTMOS | |
+| num_steps | cache_refresh | uncond_every | RTF 短句 | 整句延迟 | CER | sim | UTMOS | 备注 |
 |---:|---:|---:|---:|---|---:|---:|---:|---|
 | 32 | 0 | 1 | 0.381 | 0.5–1.0 s | 0.73 % | 0.746 | 2.826 | |
 | **16** | **8** | **3** | **0.106** | **0.23–0.44 s** | 0.40 % | 0.747 | **2.835** | **默认** |
@@ -44,7 +44,7 @@ bf16 / fp16 只有 15–25 % token 一致，所以精度的影响只看 CER / sp
 
 ## 3. 采样：KV cache、CFG 截断、置信度阈值
 
-| 手段 | 做法 | ms/step | CER | speaker sim | |
+| 手段 | 做法 | ms/step | CER | speaker sim | 采用 |
 |---|---|---|---|---|---|
 | **前缀 KV cache** | prompt 的 K/V 每 n 步算一次 | −30～37 % | 不变 | −0.01～−0.02 | ✅ |
 | CFG 截断 | 后半步不跑 uncond 分支 | −12～18 % | 出错字 | −0.05～−0.08 | ❌ |

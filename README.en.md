@@ -5,7 +5,7 @@
 An MLX port of [k2-fsa/OmniVoice](https://github.com/k2-fsa/OmniVoice). Inference pulls in neither torch nor
 transformers, and in fp32 it matches the official implementation token for token.
 
-| source | framework | device | precision | steps | RTF short | RTF long | sentence latency | |
+| source | framework | device | precision | steps | RTF short | RTF long | sentence latency | notes |
 |---|---|---|---|---:|---:|---:|---:|---|
 | official | torch | CPU | fp32 | 32 | ≈2–3 | — | — | |
 | official | torch | MPS | fp32 | 32 | 0.98 | — | — | |

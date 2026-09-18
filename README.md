@@ -5,7 +5,7 @@
 [k2-fsa/OmniVoice](https://github.com/k2-fsa/OmniVoice) 的 MLX 移植。推理不依赖 torch / transformers，
 fp32 下与官方实现逐 token 一致。
 
-| 来源 | 框架 | 设备 | 精度 | 步数 | RTF 短句 | RTF 长段 | 整句延迟 | |
+| 来源 | 框架 | 设备 | 精度 | 步数 | RTF 短句 | RTF 长段 | 整句延迟 | 备注 |
 |---|---|---|---|---:|---:|---:|---:|---|
 | 官方 | torch | CPU | fp32 | 32 | ≈2–3 | — | — | |
 | 官方 | torch | MPS | fp32 | 32 | 0.98 | — | — | |
