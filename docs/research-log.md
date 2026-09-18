@@ -126,7 +126,7 @@ B≥4 之后不再提升，再大只是多占内存。交互式场景用不上�
 
 | 改动 | 结果 | |
 |---|---|---|
-| qkv / gate_up 沿 N 拼 GEMM、cond/uncond 排 batch-2、单次带 mask 的 SDPA | 16.9 vs 17.3 ms/step，噪声内 | ❌ |
+| 三项一起：qkv / gate_up 沿 N 拼成一个 GEMM、cond/uncond 排成 batch-2、单次带 mask 的 SDPA | 16.9 vs 17.3 ms/step，噪声内 | ❌ |
 | `mx.compile` 融合 elementwise 链 | 噪声内 | ❌ |
 | 头 GEMM 改 fp16 | UTMOS 2.794 vs 2.835 | ❌ |
 | CFG 三次 log_softmax 合一次 | 代数恒等，~1 % | ✅ |
