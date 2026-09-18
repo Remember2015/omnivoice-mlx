@@ -158,41 +158,46 @@ MLX 的量化 GEMM mma 已跑满峰值的 55–75 %，唯一的浪费是把 M �
 |---|---|---:|---:|---|
 | torch CPU | fp32 | 4.02 | 1.045 | 308 / 355 / 483 |
 | torch MPS | fp32 | 0.980 | 0.363 | 71 / 85 / 115 |
-| torch MPS | fp16 | 1.136 | 0.385 | 83 / 94 / 126 |
-| torch MPS | bf16 | 1.540 | 0.469 | 110 / 125 / 175 |
 | **本移植 MLX** | **fp16** | **0.227** | 0.063 | **15.4 / 16.9 / 29.6** |
 | 本移植 MLX | 8-bit + fp16 | 0.225 | — | 15.4 / 16.9 / 29.6 |
 
-- MPS 比 CPU 快 4.1 倍。torch 在 MPS 上 fp16 只比 fp32 快 5 %（MLX 里是 15 %），bf16 慢 29 %，与第 2 节一致。
-- 同精度同步数本移植快 5.0 倍（每步 126 → 29.6 ms）；算上 16 步 + kv8 + ue3，对 MPS 最快的一组是 9.6 倍
-  （1.136 → 0.118）。
-- 本移植 fp16 32 步在第 2 节是 0.409，这里同口径重测 0.227，中间的 fast path 和 batch 改动提了近 2 倍。
-
-## 没做
-
-- **真流式**：架构上没有（NAR，整句一起 unmask），首包 = 整句耗时。
-- **split-K 量化 GEMM**：多一次 kernel 启动（10–14 µs）就把收益抵掉了。
-- **`mx.compile`**：可融合的只有几条 elementwise 链，≤ 5 %。
-- 只测了中文单音色克隆；voice design（`instruct`）和其他语言接入了但没有评测。
+- 同精度同步数快 5.0 倍；默认配置对 MPS 快 9.6 倍。
+- 另一轮同进程 dtype 扫描（三份模型常驻，绝对值偏高）：MPS 上 fp32 1.195 / fp16 1.136 / bf16 1.540，
+  fp16 只快 5 %，MLX 里是 15 %。
+- 本移植 fp16 32 步在第 2 节是 0.409，这里 0.227：中间的 fast path 和 batch 改动。
 
 ## 复现
 
-```
-uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -r requirements.txt
-uv pip install --python .venv/bin/python -r requirements-bench.txt                # 基准另加 mlx-audio 等
-hf download k2-fsa/OmniVoice --local-dir models/k2-fsa-OmniVoice                  # 各 mlx 目录的 tokenizer 软链指向它
+```bash
+uv venv --python 3.12 .venv
+uv pip install --python .venv/bin/python -r requirements.txt -r requirements-bench.txt
+
+hf download k2-fsa/OmniVoice --local-dir models/k2-fsa-OmniVoice          # 原版 fp32，各 mlx 目录的 tokenizer 软链指向它
 .venv/bin/python scripts/convert.py --out models/mlx-q8-fp16 --dtype float16 --bits 8
 
-export OMNIVOICE_REF_WAV=assets/my-voice.wav
+export OMNIVOICE_REF_WAV=assets/my-voice.wav      # 自己的 3–4 s 干净单声道录音
 export OMNIVOICE_REF_TEXT="它念的那句话，标点照写。"
-
-bench/benchlock.sh -- .venv/bin/python bench/bench.py --tag demo --model models/mlx-q8-fp16 --variants s32 s16-kv8-ue3 s8-kv4-ue1 --runs 3
-# 变体名 s<步数>[-kv<n>][-ue<n>]；uncond_every 默认值后来从 1 改成 3，早期表里的 s8-kv4 今天要写 s8-kv4-ue1
-.venv/bin/python bench/test_thread.py                                             # 工作线程里跑不炸（MLX 跨线程懒数组）
 ```
 
-与官方实现比对：`.venv-ref` 装 `torch==2.8.0 torchaudio==2.8.0 omnivoice soundfile`，跑 `bench/parity_ref.py`
-和 `bench/parity_mlx.py --dtype float32`。CER / speaker similarity / UTMOS 要你自己的 ASR / speaker / MOS 模型。
+计时一律 `bench/benchlock.sh -- …`（排他锁 + 等空载）。变体名 `s<步数>[-kv<n>][-ue<n>]`；`uncond_every` 默认值
+后来从 1 改成 3，所以第 3、4 节表里的 `s8-kv4` 今天要写 `s8-kv4-ue1`。
+
+| 节 | 命令 |
+|---|---|
+| 1 移植正确性 | `.venv-ref/bin/python bench/parity_ref.py`，再 `.venv/bin/python bench/parity_mlx.py --dtype float32` |
+| 2 精度与量化 | `bench/bench_models.py --tag flavours`（四种权重装进同一进程交错） |
+| 3 采样 / 4 步数 / 5 隔步重算 | `bench/bench.py --model models/mlx-q8-fp16 --variants s32 s16 s16-kv8-ue1 s16-kv8-ue3 s8-kv4-ue1 --runs 3` |
+| 6 多句 batch | `bench/bench_batch.py --model models/mlx-q8-fp16 --tag batch` |
+| 7 长文本 / 假流式 | `bench/bench_long.py --model models/mlx-q8-fp16`、`bench/demo_stream.py --variant s8-kv4` |
+| 8 算子层 | `bench/profile_step.py`、`bench/mm_probe.py`、`bench/gpu_util.py --seconds 8`、`bench/test_sg_e2e.py` |
+| 11 与 mlx-audio | `bench/bench_mlxaudio.py --model models/mlxaudio-bf16`（另需 `mlx-audio`） |
+| 12 与官方 torch | `.venv-ref/bin/python bench/bench_ref_device.py --devices cpu mps --steps 8 32 --runs 3` |
+
+官方实现要单独一个 venv：`uv venv --python 3.12 .venv-ref` 后装
+`torch==2.8.0 torchaudio==2.8.0 omnivoice soundfile`。
+
+质量三项（CER / speaker similarity / UTMOS）要你自己的 ASR / speaker / MOS 模型：`bench/bench.py` 把 wav 写进
+`out/<tag>/`，拿去喂你那套，再用 `bench/aggregate.py --quality` 出表。
 
 ## 许可
 
