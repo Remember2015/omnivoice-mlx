@@ -71,7 +71,7 @@ fp16 单句，16 个变体同进程交错。
 
 ## 5. 无条件分支隔步重算：RTF 降 20 %，三个指标不变
 
-`uncond_every=n`，缓存步里每 n 步重算一次无条件分支，中间步复用上次的 log-prob。
+`uncond_every=n`：每 n 步重算一次无条件分支，中间的步复用上次的 log-prob。
 
 | 变体 | RTF 3 句 | CER | sim 均值 / 最低 | UTMOS |
 |---|---:|---:|---|---:|
@@ -89,7 +89,7 @@ fp16 单句，16 个变体同进程交错。
 
 20 句集按 B 句一组走 `generate_batch`。
 
-| B | RTF | 每步行数 | 折算 GEMM | 峰值内存 |
+| B | RTF | 每步行数 | GEMM 速率 | 峰值内存 |
 |---:|---:|---:|---:|---:|
 | 1 | 0.106 | 128 | 5.9 TFLOPS | 2.57 GB |
 | 2 | 0.093 | 258 | 6.9 | — |
@@ -113,13 +113,13 @@ B≥4 之后不再提升，再大只是多占内存；交互式场景用不上�
 
 ## 8. 算子层已经没有余地
 
-| T | 行 | 缓存步 GPU | 28 层注意力 | 28 层 MLP | 头 + CFG + 采样 | 主线程构图 |
+| T | 行 | 一步 GPU 耗时 | 28 层注意力 | 28 层 MLP | 头 + CFG + 采样 | 主线程构图 |
 |---:|---:|---:|---:|---:|---:|---:|
 | 39 | 78 | 16.0 ms | 9.0 | 7.4 | 0.8 | 1.0 |
 | 126 | 252 | 33.4 | 16.9 | 17.7 | 1.5 | 2.5 |
 
 - 主线程 1–2.5 ms，不是瓶颈。四个 8-bit GEMM 占一步的 67 %（T=126 时 77 %）。
-- GPU 占用率 98–99 %，折算 5.9 TFLOPS（峰值 13.6 的 43 %），长块 7.1（52 %）。
+- GPU 占用率 98–99 %，GEMM 速率 5.9 TFLOPS（峰值 13.6 的 43 %），长块 7.1（52 %）。
 - 做过但没有收益：qkv / gate_up 沿 N 拼 GEMM + cond/uncond 排 batch-2 + 单次带 mask 的 SDPA（16.9 vs 17.3 ms/step，
   噪声内）；`mx.compile` 融合 elementwise 链（噪声内）；头 GEMM 改 fp16（UTMOS 2.794 vs 2.835，**弃**）。
   CFG 三次 log_softmax 合一次是代数恒等，~1 %。
@@ -204,7 +204,7 @@ bench/benchlock.sh -- .venv/bin/python bench/bench.py --tag demo --model models/
 .venv/bin/python bench/test_thread.py                                             # 工作线程里跑不炸（MLX 跨线程懒数组）
 ```
 
-官方真值：`.venv-ref` 装 `torch==2.8.0 torchaudio==2.8.0 omnivoice soundfile`，跑 `bench/parity_ref.py`
+与官方实现比对：`.venv-ref` 装 `torch==2.8.0 torchaudio==2.8.0 omnivoice soundfile`，跑 `bench/parity_ref.py`
 和 `bench/parity_mlx.py --dtype float32`。CER / speaker similarity / UTMOS 要你自己的三个模型，见「方法」。
 
 ## 许可
