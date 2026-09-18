@@ -1,5 +1,3 @@
-# 研究记录：OmniVoice 在 MLX 上的移植与 RTF
-
 安装和用法见 [../README.md](../README.md)。本文是测量记录，负结果一并保留。
 
 测试环境：M2 Max（12 核 CPU / 38 核 GPU / 32 GB），macOS 26.6，MLX 0.32.2。
