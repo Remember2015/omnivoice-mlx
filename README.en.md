@@ -15,7 +15,7 @@ transformers, and in fp32 it matches the official implementation token for token
 | this port | MLX | GPU | 8bit+fp16 | 16 | 0.080 | — | — | batched B=4–8 |
 | this port | MLX | GPU | 8bit+fp16 | 8 | 0.075 | 0.057 | 0.16–0.32 s | |
 
-M2 Max 12-core CPU / 38-core GPU / 32 GB, macOS 26.6, MLX 0.32.2. Method, ablations and dead ends:
+M2 Max 12-core CPU / 38-core GPU / 32 GB, macOS 26.6, MLX 0.32.2. Method, ablations and dead ends are in
 [docs/research-log.md](docs/research-log.md) (Chinese).
 
 ## Install
@@ -71,7 +71,7 @@ export OMNIVOICE_REF_TEXT="what the clip says, punctuation included."
 | fp16 activations | 12–15 % faster; the M2 has no native bf16, so bf16 runs at fp32 speed |
 | 32 → 16 steps | CER / speaker similarity / UTMOS unchanged |
 | prefix KV cache | the prompt's K/V is recomputed every 8 steps |
-| stale CFG | −20 %, same three metrics |
+| stale CFG | 20 % faster, same three metrics |
 | 8-bit weights | 1.99 → 1.56 GB resident |
 
 ## Layout

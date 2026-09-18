@@ -15,8 +15,7 @@ fp32 下与官方实现逐 token 一致。
 | 本项目 | MLX | GPU | 8bit+fp16 | 16 | 0.080 | — | — | batch B=4–8 |
 | 本项目 | MLX | GPU | 8bit+fp16 | 8 | 0.075 | 0.057 | 0.16–0.32 s | |
 
-M2 Max 12 核 / 38 核 GPU / 32 GB，macOS 26.6，MLX 0.32.2。测法、消融与负结果见
-[docs/research-log.md](docs/research-log.md)。
+M2 Max 12 核 / 38 核 GPU / 32 GB，macOS 26.6，MLX 0.32.2。测量方法、消融与负结果见 [docs/research-log.md](docs/research-log.md)。
 
 ## 安装
 
@@ -25,7 +24,7 @@ pip install git+https://github.com/Remember2015/omnivoice-mlx
 hf download remember2015/omnivoice-mlx-q8-fp16 --local-dir models/mlx-q8-fp16
 ```
 
-codec 权重另有许可，不随上面那份分发，从上游取：
+codec 权重另有许可，不在上面那份里，从上游下载：
 
 ```bash
 hf download k2-fsa/OmniVoice --local-dir models/k2-fsa-OmniVoice
@@ -33,7 +32,7 @@ ln -s ../k2-fsa-OmniVoice/audio_tokenizer models/mlx-q8-fp16/audio_tokenizer
 python -c "from omnivoice_mlx.codec import write_slim_decoder; write_slim_decoder('models/mlx-q8-fp16', 'float16')"
 ```
 
-解码只用导出的这 44 MB 分支，完整 tokenizer 仅编码参考音时加载。
+解码只用导出的这 44 MB 分支，完整 tokenizer 只在编码参考音时加载。
 `scripts/convert.py` 还能导出 bf16 / fp16 / 4-bit，以及 embedding 和 head 一起量化的 345 MB 版本。
 
 ## 使用
@@ -56,7 +55,7 @@ SamplerConfig(32, cache_refresh=0, uncond_every=1)  # 官方
 SamplerConfig(8, cache_refresh=4, uncond_every=1)   # 表里 8 步那行
 ```
 
-参考音仓库不带，自己准备：3–4 s 干净单声道，转写须与音频一致（它进 prompt）。`bench/` 走环境变量：
+参考音需要自己准备，仓库里不带：3–4 s 干净单声道，转写要与音频一致（它会进 prompt）。`bench/` 走环境变量：
 
 ```bash
 export OMNIVOICE_REF_WAV=assets/my-voice.wav
@@ -70,7 +69,7 @@ export OMNIVOICE_REF_TEXT="它念的那句话，标点照写。"
 | 激活 fp16 | 快 12–15 %；M2 无原生 bf16，bf16 与 fp32 同速 |
 | 步数 32 → 16 | CER / speaker similarity / UTMOS 不变 |
 | 前缀 KV cache | prompt 的 K/V 每 8 步重算一次 |
-| uncond 隔步复用 | −20 %，三项指标不变 |
+| uncond 隔步复用 | 快 20 %，同样三项不变 |
 | 8-bit 量化 | 省常驻内存 1.99 → 1.56 GB |
 
 ## 目录
