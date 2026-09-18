@@ -100,5 +100,5 @@ docs/                 # the research log
 |---|---|
 | this repository's code | Apache-2.0, following upstream (`LICENSE`, `NOTICE`) |
 | `omnivoice_mlx/higgs/` | MIT, vendored from [mlx-audio](https://github.com/Blaizzy/mlx-audio) (`THIRD-PARTY-LICENSES.md`) |
-| pre-trained weights and derivatives (`convert.py` output, the HF checkpoint) | **CC-BY-NC**, non-commercial, attribution required |
+| model weights | **CC-BY-NC**, non-commercial, attribution required |
 | Higgs codec weights | Boson Higgs Audio 2 Community License |

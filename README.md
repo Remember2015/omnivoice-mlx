@@ -71,7 +71,7 @@ export OMNIVOICE_REF_TEXT="它念的那句话，标点照写。"
 | 步数 32 → 16 | CER / speaker similarity / UTMOS 不变 |
 | 前缀 KV cache | prompt 的 K/V 每 8 步重算一次 |
 | uncond 隔步复用 | −20 %，三项指标不变 |
-| 8-bit 量化 | 不提速，每步 GEMM 的 M ≈ 200–400，瓶颈在 kernel 发射；省常驻内存 1.99 → 1.56 GB |
+| 8-bit 量化 | 不提速，每步 GEMM 的 M ≈ 200–400，卡在 kernel 启动开销上；省常驻内存 1.99 → 1.56 GB |
 
 ## 目录
 
@@ -87,7 +87,7 @@ omnivoice_mlx/
 ├── kernels*.py       # 自定义 Metal GEMM，默认关
 └── higgs/            # tokenizer，vendor 自 mlx-audio（MIT）
 scripts/convert.py    # 导出 MLX 权重
-bench/                # 对拍、计时、benchlock.sh
+bench/                # parity、计时、benchlock.sh
 docs/                 # 研究记录
 ```
 
@@ -97,5 +97,5 @@ docs/                 # 研究记录
 |---|---|
 | 本仓库代码 | Apache-2.0，同上游（`LICENSE`、`NOTICE`） |
 | `omnivoice_mlx/higgs/` | MIT，vendor 自 [mlx-audio](https://github.com/Blaizzy/mlx-audio)（`THIRD-PARTY-LICENSES.md`） |
-| 预训练权重及其衍生物（`convert.py` 的产物、HF 上那份） | **CC-BY-NC**，非商用、需署名 |
+| 模型权重 | **CC-BY-NC**，非商用、需署名 |
 | Higgs codec 权重 | Boson Higgs Audio 2 Community License |
