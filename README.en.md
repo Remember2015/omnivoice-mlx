@@ -14,8 +14,7 @@ transformers, and in fp32 it matches the official implementation token for token
 | **this port** | **MLX** | **GPU** | **int8** | **fp16** | **16** | **0.106** | **default** |
 | this port | MLX | GPU | int8 | fp16 | 16 | 0.080 | batched B=4–8 |
 
-At the default a 7–34 character sentence comes out whole in 0.23–0.44 s; NAR has no streaming, so the first packet
-is the whole sentence. M2 Max 12-core CPU / 38-core GPU / 32 GB, macOS 26.6, MLX 0.32.2. Method, ablations and dead ends are in
+M2 Max 12-core CPU / 38-core GPU / 32 GB, macOS 26.6, MLX 0.32.2. Method, ablations and dead ends are in
 [docs/research-log.md](docs/research-log.md) (Chinese).
 
 ## Install
