@@ -65,22 +65,13 @@ export OMNIVOICE_REF_TEXT="它念的那句话，标点照写。"
 
 ## 性能优化
 
-| 用了 | 效果 |
+| 手段 | 效果 |
 |---|---|
 | 激活 fp16 | 快 12–15 %；M2 无原生 bf16，bf16 与 fp32 同速 |
 | 步数 32 → 16 | CER / speaker similarity / UTMOS 不变 |
 | 前缀 KV cache | prompt 的 K/V 每 8 步重算一次 |
 | uncond 隔步复用 | −20 %，三项指标不变 |
 | 8-bit 量化 | 不提速，每步 GEMM 的 M ≈ 200–400，瓶颈在 kernel 发射；省常驻内存 1.99 → 1.56 GB |
-
-| 没用 | 结果 |
-|---|---|
-| 自定义 Metal GEMM | 仅 M ≤ 80 且 N ≥ 4096 快 1.05–1.3×，其余慢 10–15 % |
-| CFG 截断 | speaker similarity −0.05～−0.08 |
-| 置信度阈值自适应步数 | 几乎不触发，每步同步反而慢 |
-| 4 步 | speaker similarity −0.03，出整句错 |
-| 分句续接 | UTMOS 2.95 → 2.65 |
-| `mx.compile` | 可融合的只有几条 elementwise 链，≤ 5 % |
 
 ## 目录
 

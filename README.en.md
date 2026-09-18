@@ -68,22 +68,13 @@ export OMNIVOICE_REF_TEXT="what the clip says, punctuation included."
 
 ## Where the speed comes from
 
-| kept | effect |
+| technique | effect |
 |---|---|
 | fp16 activations | 12–15 % faster; the M2 has no native bf16, so bf16 runs at fp32 speed |
 | 32 → 16 steps | CER / speaker similarity / UTMOS unchanged |
 | prefix KV cache | the prompt's K/V is recomputed every 8 steps |
 | stale CFG | −20 %, same three metrics |
 | 8-bit weights | no speedup: each step's GEMM has M ≈ 200–400, bound by kernel dispatch; buys 1.99 → 1.56 GB resident |
-
-| dropped | result |
-|---|---|
-| custom Metal GEMM | wins 1.05–1.3× only at M ≤ 80 and N ≥ 4096, loses 10–15 % elsewhere |
-| CFG truncation | speaker similarity −0.05 to −0.08 |
-| confidence-threshold adaptive steps | almost never fires, and the per-step sync costs more |
-| 4 steps | speaker similarity −0.03, whole sentences come out wrong |
-| clause-to-clause continuation | UTMOS 2.95 → 2.65 |
-| `mx.compile` | only a few elementwise chains are fusable, ≤ 5 % |
 
 ## Layout
 
