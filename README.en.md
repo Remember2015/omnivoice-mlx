@@ -41,16 +41,21 @@ come from `scripts/convert.py`: bf16, fp16, 4-bit, and a 345 MB build with embed
 
 ```python
 from omnivoice_mlx import OmniVoiceTTS, SamplerConfig
+from omnivoice_mlx.stream import generate_stream
 
 tts = OmniVoiceTTS("models/mlx-q8-fp16")
 voice = tts.make_prompt("my-voice.wav", "exactly what that clip says.")
-r = tts.generate("今天天气不错，我们出去走走吧。", voice, language="zh")   # r.audio float32 24 kHz, r.rtf
-```
 
-`SamplerConfig()` defaults to `num_steps=16, cache_refresh=8, uncond_every=3`. The official sampler is
-`SamplerConfig(32, cache_refresh=0, uncond_every=1)`, the fast one `SamplerConfig(8, cache_refresh=4)`. There is also
-`generate_batch` (length-bucketed packing), `generate_long` (the official chunking path) and `omnivoice_mlx.stream`
-(clause-ahead synthesis: 165 ms to first audio, no underruns after that).
+r = tts.generate("今天天气不错，我们出去走走吧。", voice)   # r.audio: float32 24 kHz, r.rtf
+tts.generate_batch(["第一句。", "第二句。"], voice, max_batch=4)
+tts.generate_long(paragraph, voice)                      # official chunking path
+for piece in generate_stream(tts, paragraph, voice):     # clause-ahead, 165 ms to first audio
+    play(piece.audio)
+
+SamplerConfig()                                     # num_steps=16, cache_refresh=8, uncond_every=3
+SamplerConfig(32, cache_refresh=0, uncond_every=1)  # official
+SamplerConfig(8, cache_refresh=4, uncond_every=1)   # the 8-step row above
+```
 
 The reference clip is yours to supply — a recorded voice belongs to whoever spoke it, so none ships here. 3–4 s of
 clean mono, with a transcript that matches the audio (it goes into the prompt). `bench/` reads it from the
@@ -63,20 +68,22 @@ export OMNIVOICE_REF_TEXT="what the clip says, punctuation included."
 
 ## Where the speed comes from
 
-- fp16 activations. The M2 GPU has no native bf16, MLX emulates it, and bf16 runs at fp32 speed; fp16 is 12–15 % faster.
-- 32 → 16 steps. CER, speaker similarity and UTMOS are all unchanged; UTMOS only drops 5 % at 8 steps.
-- Prefix KV cache. The prompt's K/V is recomputed every 8 steps, and the steps in between only push target tokens.
-- Stale CFG. The unconditional branch runs every 3 steps: −20 %, same three metrics.
+| kept | effect |
+|---|---|
+| fp16 activations | 12–15 % faster; the M2 has no native bf16, so bf16 runs at fp32 speed |
+| 32 → 16 steps | CER / speaker similarity / UTMOS unchanged |
+| prefix KV cache | the prompt's K/V is recomputed every 8 steps |
+| stale CFG | −20 %, same three metrics |
+| 8-bit weights | no speedup: each step's GEMM has M ≈ 200–400, bound by kernel dispatch; buys 1.99 → 1.56 GB resident |
 
-Quantisation is not a speedup. With bf16 activations 8-bit is 15–30 % *slower* than fp16: each step is a GEMM with
-M ≈ 200–400, bound by kernel dispatch rather than bandwidth, and `quantized_matmul` has no edge at that size. It
-only overtakes fp16 (by 3–12 %) once the activations are fp16 too. What it really buys is resident memory,
-1.99 → 1.56 GB.
-
-The dead ends are all written up in the log: custom Metal GEMM kernels (the simdgroup version wins 1.05–1.3× only at
-M ≤ 80 and N ≥ 4096, and loses 10–15 % elsewhere), CFG truncation (speaker similarity −0.05 to −0.08), a
-confidence-threshold adaptive step count, 4 steps, clause-to-clause prompt continuation (UTMOS 2.95 → 2.65), and
-`mx.compile`.
+| dropped | result |
+|---|---|
+| custom Metal GEMM | wins 1.05–1.3× only at M ≤ 80 and N ≥ 4096, loses 10–15 % elsewhere |
+| CFG truncation | speaker similarity −0.05 to −0.08 |
+| confidence-threshold adaptive steps | almost never fires, and the per-step sync costs more |
+| 4 steps | speaker similarity −0.03, whole sentences come out wrong |
+| clause-to-clause continuation | UTMOS 2.95 → 2.65 |
+| `mx.compile` | only a few elementwise chains are fusable, ≤ 5 % |
 
 ## Layout
 

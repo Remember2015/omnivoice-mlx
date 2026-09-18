@@ -40,16 +40,21 @@ python -c "from omnivoice_mlx.codec import write_slim_decoder; write_slim_decode
 
 ```python
 from omnivoice_mlx import OmniVoiceTTS, SamplerConfig
+from omnivoice_mlx.stream import generate_stream
 
 tts = OmniVoiceTTS("models/mlx-q8-fp16")
 voice = tts.make_prompt("my-voice.wav", "这段录音念的那句话，标点照写。")
-r = tts.generate("今天天气不错，我们出去走走吧。", voice, language="zh")   # r.audio float32 24 kHz, r.rtf
-```
 
-`SamplerConfig()` 默认 `num_steps=16, cache_refresh=8, uncond_every=3`；官方采样
-`SamplerConfig(32, cache_refresh=0, uncond_every=1)`，要更快用 `SamplerConfig(8, cache_refresh=4)`。
-另有 `generate_batch`（按长度分桶打包）、`generate_long`（官方分块路径）、
-`omnivoice_mlx.stream`（分句预生成，首音频 165 ms，零断流）。
+r = tts.generate("今天天气不错，我们出去走走吧。", voice)   # r.audio: float32 24 kHz；r.rtf
+tts.generate_batch(["第一句。", "第二句。"], voice, max_batch=4)
+tts.generate_long(paragraph, voice)                      # 官方分块路径
+for piece in generate_stream(tts, paragraph, voice):     # 分句预生成，首音频 165 ms
+    play(piece.audio)
+
+SamplerConfig()                                     # num_steps=16, cache_refresh=8, uncond_every=3
+SamplerConfig(32, cache_refresh=0, uncond_every=1)  # 官方
+SamplerConfig(8, cache_refresh=4, uncond_every=1)   # 表里 8 步那行
+```
 
 参考音仓库不带，自己准备：3–4 s 干净单声道，转写须与音频一致（它进 prompt）。`bench/` 走环境变量：
 
@@ -60,16 +65,22 @@ export OMNIVOICE_REF_TEXT="它念的那句话，标点照写。"
 
 ## 性能优化
 
-- 激活 fp16。M2 GPU 无原生 bf16，MLX 走模拟，bf16 与 fp32 同速；fp16 快 12–15 %。
-- 步数 32 → 16。CER、声纹、UTMOS 三项都不动，8 步才掉 5 % UTMOS。
-- 前缀 KV 缓存。prompt 的 K/V 每 8 步重算一次，中间步只送目标 token。
-- uncond 隔步复用。CFG 的无条件分支每 3 步算一次，−20 %，三项指标不变。
+| 用了 | 效果 |
+|---|---|
+| 激活 fp16 | 快 12–15 %；M2 无原生 bf16，bf16 与 fp32 同速 |
+| 步数 32 → 16 | CER / 声纹 / UTMOS 不变 |
+| 前缀 KV 缓存 | prompt 的 K/V 每 8 步重算一次 |
+| uncond 隔步复用 | −20 %，三项指标不变 |
+| 8-bit 量化 | 不提速，每步 GEMM 的 M ≈ 200–400，瓶颈在 kernel 发射；省常驻内存 1.99 → 1.56 GB |
 
-量化不是提速手段。激活留 bf16 时 8-bit 反而比 fp16 慢 15–30 %：每步 GEMM 的 M ≈ 200–400，瓶颈在 kernel 发射
-而非带宽，`quantized_matmul` 在这个尺寸上不占优；配 fp16 激活后才反超 3–12 %。它真正省的是常驻内存，1.99 → 1.56 GB。
-
-负结果都留在日志里：自定义 Metal GEMM（simdgroup 版仅 M ≤ 80 且 N ≥ 4096 快 1.05–1.3×，其余慢 10–15 %）、
-CFG 截断（声纹 −0.05～−0.08）、置信度阈值自适应步数、4 步、分句续接（UTMOS 2.95 → 2.65）、`mx.compile`。
+| 没用 | 结果 |
+|---|---|
+| 自定义 Metal GEMM | 仅 M ≤ 80 且 N ≥ 4096 快 1.05–1.3×，其余慢 10–15 % |
+| CFG 截断 | 声纹 −0.05～−0.08 |
+| 置信度阈值自适应步数 | 几乎不触发，每步同步反而慢 |
+| 4 步 | 声纹 −0.03，出整句错 |
+| 分句续接 | UTMOS 2.95 → 2.65 |
+| `mx.compile` | 可融合的只有几条逐元素链，≤ 5 % |
 
 ## 目录
 
