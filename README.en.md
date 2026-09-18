@@ -5,14 +5,14 @@
 An MLX port of [k2-fsa/OmniVoice](https://github.com/k2-fsa/OmniVoice). Inference pulls in neither torch nor
 transformers, and in fp32 it matches the official implementation token for token.
 
-| implementation | weights / activations | steps | RTF short | RTF long | sentence latency |
-|---|---|---:|---:|---:|---:|
-| official torch, CPU | fp32 | 32 | ≈2–3 | — | — |
-| official torch, MPS | fp32 | 32 | 0.98 | — | — |
-| official torch, MPS | fp16 | 32 | 1.14 | — | — |
-| this port | fp16 | 32 | 0.23 | 0.10 | 0.5–1.0 s |
-| **this port (default)** | **8-bit g64 + fp16** | **16** | **0.106** | **≈0.08** | **0.23–0.44 s** |
-| this port (fast, UTMOS −5 %) | 8-bit g64 + fp16 | 8 | 0.075 | 0.057 | 0.16–0.32 s |
+| source | framework | device | weights / activations | steps | RTF short | RTF long | sentence latency | |
+|---|---|---|---|---:|---:|---:|---:|---|
+| official | torch | CPU | fp32 | 32 | ≈2–3 | — | — | |
+| official | torch | MPS | fp32 | 32 | 0.98 | — | — | |
+| official | torch | MPS | fp16 | 32 | 1.14 | — | — | |
+| this port | MLX | GPU | fp16 | 32 | 0.23 | 0.10 | 0.5–1.0 s | |
+| **this port** | **MLX** | **GPU** | **8-bit g64 + fp16** | **16** | **0.106** | **≈0.08** | **0.23–0.44 s** | **default** |
+| this port | MLX | GPU | 8-bit g64 + fp16 | 8 | 0.075 | 0.057 | 0.16–0.32 s | fast, UTMOS −5 % |
 
 Short = three sentences of 7 / 17 / 34 characters pooled, long = one 46 s paragraph. Batched (B=4–8)
 short-sentence RTF is 0.080. M2 Max 12-core CPU / 38-core GPU / 32 GB, macOS 26.6, MLX 0.32.2. Method, ablations and
