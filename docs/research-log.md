@@ -125,6 +125,9 @@ B≥4 之后不再提升，再大只是多占内存。交互式场景用不上�
 MLX 的量化 GEMM mma 已跑满峰值的 55–75 %，唯一的浪费是把 M 补到 32：M=32 → 33 时耗时从 56 跳到 90 µs。
 单句延迟在算子层已无空间。
 
+自己写过两版 Metal GEMM（`kernels.py` 的 GEMV 式、`kernels_sg.py` 的 simdgroup 版），都没能超过 MLX 内置的，
+代码留着但默认不用，`load_model(custom_gemm=True)` 可开。
+
 ## 9. codec 瘦身
 
 - 只装解码分支（fp16，44 MB，SNR 59 dB），编码分支在 `make_prompt` 时懒加载、可释放：常驻 1.57 → 0.87 GB。
