@@ -1,0 +1,4 @@
+-r requirements.txt
+huggingface_hub
+mlx-audio>=0.5
+scipy

@@ -1,0 +1,3 @@
+# text normalisation (omnivoice_mlx.textnorm / ttstext), imported lazily
+markdown-it-py
+wetext

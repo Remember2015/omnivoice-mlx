@@ -1,0 +1,20 @@
+omnivoice-mlx
+Copyright 2026 Luke (子龙) <developer@ohmyai.app>
+
+This product includes software derived from OmniVoice
+(https://github.com/k2-fsa/OmniVoice, https://huggingface.co/k2-fsa/OmniVoice),
+Copyright 2026 Xiaomi Corp., licensed under the Apache License, Version 2.0.
+The inference path here is an independent MLX implementation, but the sampler,
+the prompt layout, the duration estimator and the pre/post-processing follow
+that code closely, and the two agree token for token in fp32.
+
+omnivoice_mlx/higgs/ is vendored from mlx-audio
+(https://github.com/Blaizzy/mlx-audio), Copyright (c) 2024 Prince Canuma,
+licensed under the MIT License. Local edits are marked "# vendored:".
+See THIRD-PARTY-LICENSES.md for the full text.
+
+The model weights are NOT part of this repository and are NOT covered by this
+licence. k2-fsa/OmniVoice releases its code under Apache-2.0 and its pre-trained
+weights under CC-BY-NC, because of constraints from its training data. Anything
+scripts/convert.py produces is a derivative of those weights and carries the
+same CC-BY-NC terms: non-commercial use, with attribution.

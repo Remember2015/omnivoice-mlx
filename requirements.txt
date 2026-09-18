@@ -1,0 +1,5 @@
+mlx>=0.32
+numpy
+soundfile
+tokenizers
+safetensors

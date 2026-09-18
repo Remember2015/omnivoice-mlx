@@ -1,0 +1,10 @@
+models/
+out/
+assets/*
+!assets/.gitkeep
+.venv*/
+.cache/
+__pycache__/
+*.pyc
+*.wav
+*.npz
