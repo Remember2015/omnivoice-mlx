@@ -2,11 +2,10 @@
 
 [简体中文](README.md) | English
 
-An MLX port of [k2-fsa/OmniVoice](https://github.com/k2-fsa/OmniVoice) — 0.6B masked-diffusion (non-autoregressive)
-TTS, Qwen3 bidirectional backbone, Higgs-audio v2 codec. Inference pulls in neither torch nor transformers, and in
-fp32 it matches the official implementation token for token.
+An MLX port of [k2-fsa/OmniVoice](https://github.com/k2-fsa/OmniVoice). Inference pulls in neither torch nor
+transformers, and in fp32 it matches the official implementation token for token.
 
-| implementation | weights / activations | steps | RTF short | RTF long | first packet |
+| implementation | weights / activations | steps | RTF short | RTF long | sentence latency |
 |---|---|---:|---:|---:|---:|
 | official torch, CPU | fp32 | 32 | ≈2–3 | — | — |
 | official torch, MPS | fp32 | 32 | 0.98 | — | — |
@@ -15,10 +14,9 @@ fp32 it matches the official implementation token for token.
 | **this port (default)** | **8-bit g64 + fp16** | **16** | **0.106** | **≈0.08** | **0.23–0.44 s** |
 | this port (fast, UTMOS −5 %) | 8-bit g64 + fp16 | 8 | 0.075 | 0.057 | 0.16–0.32 s |
 
-Short = three sentences of 7 / 17 / 34 characters pooled, long = one 46 s paragraph. NAR has no streaming, so the
-first packet is the whole sentence. Batched (B=4–8) short-sentence RTF is 0.080. M2 Max 12-core CPU / 38-core GPU /
-32 GB, macOS 26.6, MLX 0.32.2. Method, ablations and dead ends: [docs/research-log.md](docs/research-log.md)
-(Chinese).
+Short = three sentences of 7 / 17 / 34 characters pooled, long = one 46 s paragraph. Batched (B=4–8)
+short-sentence RTF is 0.080. M2 Max 12-core CPU / 38-core GPU / 32 GB, macOS 26.6, MLX 0.32.2. Method, ablations and
+dead ends: [docs/research-log.md](docs/research-log.md) (Chinese).
 
 ## Install
 
@@ -36,9 +34,8 @@ ln -s ../k2-fsa-OmniVoice/audio_tokenizer models/mlx-q8-fp16/audio_tokenizer
 python -c "from omnivoice_mlx.codec import write_slim_decoder; write_slim_decoder('models/mlx-q8-fp16', 'float16')"
 ```
 
-`write_slim_decoder` writes out the 44 MB decode branch, which is all inference reads; the full tokenizer is loaded
-only when encoding a reference clip. Other flavours (bf16, fp16, 4-bit, and a 345 MB build with embeddings and heads
-quantised too) come from `scripts/convert.py`.
+Decoding reads only that 44 MB branch; the full tokenizer is loaded when encoding a reference clip. Other flavours
+come from `scripts/convert.py`: bf16, fp16, 4-bit, and a 345 MB build with embeddings and heads quantised too.
 
 ## Use
 

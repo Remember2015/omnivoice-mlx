@@ -2,10 +2,10 @@
 
 简体中文 | [English](README.en.md)
 
-[k2-fsa/OmniVoice](https://github.com/k2-fsa/OmniVoice)（0.6B，Qwen3 双向主干 + Higgs-audio v2 codec，
-masked-diffusion NAR TTS）的 MLX 移植。推理不依赖 torch / transformers，fp32 下与官方实现逐 token 一致。
+[k2-fsa/OmniVoice](https://github.com/k2-fsa/OmniVoice) 的 MLX 移植。推理不依赖 torch / transformers，
+fp32 下与官方实现逐 token 一致。
 
-| 实现 | 权重 / 激活 | 步数 | RTF 短句 | RTF 长段 | 首包 |
+| 实现 | 权重 / 激活 | 步数 | RTF 短句 | RTF 长段 | 整句延迟 |
 |---|---|---:|---:|---:|---:|
 | 官方 torch，CPU | fp32 | 32 | ≈2–3 | — | — |
 | 官方 torch，MPS | fp32 | 32 | 0.98 | — | — |
@@ -14,7 +14,7 @@ masked-diffusion NAR TTS）的 MLX 移植。推理不依赖 torch / transformers
 | **本移植（默认）** | **8-bit g64 + fp16** | **16** | **0.106** | **≈0.08** | **0.23–0.44 s** |
 | 本移植（快档，UTMOS −5 %） | 8-bit g64 + fp16 | 8 | 0.075 | 0.057 | 0.16–0.32 s |
 
-短句 = 7 / 17 / 34 字三句合并，长段 = 46 s 整段；NAR 无流式，首包即整句。多句打包（B=4–8）短句 RTF 0.080。
+短句 = 7 / 17 / 34 字三句合并，长段 = 46 s 整段。多句打包（B=4–8）短句 RTF 0.080。
 M2 Max 12 核 / 38 核 GPU / 32 GB，macOS 26.6，MLX 0.32.2。测法、消融与负结果见
 [docs/research-log.md](docs/research-log.md)。
 
@@ -33,8 +33,8 @@ ln -s ../k2-fsa-OmniVoice/audio_tokenizer models/mlx-q8-fp16/audio_tokenizer
 python -c "from omnivoice_mlx.codec import write_slim_decoder; write_slim_decoder('models/mlx-q8-fp16', 'float16')"
 ```
 
-`write_slim_decoder` 导出 44 MB 的解码分支，推理只用它；完整 tokenizer 仅在编码参考音时加载。
-其它档用 `scripts/convert.py`（bf16 / fp16 / 4-bit，以及嵌入和头全量化的 345 MB 档）。
+解码只用导出的这 44 MB 分支，完整 tokenizer 仅编码参考音时加载。
+其它档走 `scripts/convert.py`：bf16 / fp16 / 4-bit，以及嵌入和头全量化的 345 MB 档。
 
 ## 使用
 
