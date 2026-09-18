@@ -5,16 +5,17 @@
 An MLX port of [k2-fsa/OmniVoice](https://github.com/k2-fsa/OmniVoice). Inference pulls in neither torch nor
 transformers, and in fp32 it matches the official implementation token for token.
 
-| source | framework | device | weights | activations | steps | RTF | sentence latency | notes |
-|---|---|---|---|---|---:|---:|---:|---|
-| official | torch | CPU | fp32 | fp32 | 32 | ≈2–3 | — | |
-| official | torch | MPS | fp32 | fp32 | 32 | 0.98 | — | |
-| mlx-audio | MLX | GPU | bf16 | bf16 | 32 | 0.68 | — | |
-| this port | MLX | GPU | int8 | fp16 | 32 | 0.381 | 0.5–1.0 s | |
-| **this port** | **MLX** | **GPU** | **int8** | **fp16** | **16** | **0.106** | **0.23–0.44 s** | **default** |
-| this port | MLX | GPU | int8 | fp16 | 16 | 0.080 | — | batched B=4–8 |
+| source | framework | device | weights | activations | steps | RTF | notes |
+|---|---|---|---|---|---:|---:|---|
+| official | torch | CPU | fp32 | fp32 | 32 | ≈2–3 | |
+| official | torch | MPS | fp32 | fp32 | 32 | 0.98 | |
+| mlx-audio | MLX | GPU | bf16 | bf16 | 32 | 0.68 | |
+| this port | MLX | GPU | int8 | fp16 | 32 | 0.381 | |
+| **this port** | **MLX** | **GPU** | **int8** | **fp16** | **16** | **0.106** | **default** |
+| this port | MLX | GPU | int8 | fp16 | 16 | 0.080 | batched B=4–8 |
 
-M2 Max 12-core CPU / 38-core GPU / 32 GB, macOS 26.6, MLX 0.32.2. Method, ablations and dead ends are in
+At the default a 7–34 character sentence comes out whole in 0.23–0.44 s; NAR has no streaming, so the first packet
+is the whole sentence. M2 Max 12-core CPU / 38-core GPU / 32 GB, macOS 26.6, MLX 0.32.2. Method, ablations and dead ends are in
 [docs/research-log.md](docs/research-log.md) (Chinese).
 
 ## Install
