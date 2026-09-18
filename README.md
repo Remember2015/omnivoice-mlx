@@ -71,7 +71,7 @@ export OMNIVOICE_REF_TEXT="它念的那句话，标点照写。"
 | 步数 32 → 16 | CER / speaker similarity / UTMOS 不变 |
 | 前缀 KV cache | prompt 的 K/V 每 8 步重算一次 |
 | uncond 隔步复用 | −20 %，三项指标不变 |
-| 8-bit 量化 | 不提速，每步 GEMM 的 M ≈ 200–400，卡在 kernel 启动开销上；省常驻内存 1.99 → 1.56 GB |
+| 8-bit 量化 | 省常驻内存 1.99 → 1.56 GB |
 
 ## 目录
 

@@ -25,8 +25,7 @@ pip install git+https://github.com/Remember2015/omnivoice-mlx
 hf download remember2015/omnivoice-mlx-q8-fp16 --local-dir models/mlx-q8-fp16
 ```
 
-The codec weights have their own licence and are not redistributed with the checkpoint above; take them from
-upstream:
+The codec weights have their own licence and are not in that checkpoint; take them from upstream:
 
 ```bash
 hf download k2-fsa/OmniVoice --local-dir models/k2-fsa-OmniVoice
@@ -34,8 +33,8 @@ ln -s ../k2-fsa-OmniVoice/audio_tokenizer models/mlx-q8-fp16/audio_tokenizer
 python -c "from omnivoice_mlx.codec import write_slim_decoder; write_slim_decoder('models/mlx-q8-fp16', 'float16')"
 ```
 
-Decoding reads only that 44 MB branch; the full tokenizer is loaded when encoding a reference clip. Other flavours
-come from `scripts/convert.py`: bf16, fp16, 4-bit, and a 345 MB build with embeddings and heads quantised too.
+Decoding reads only that 44 MB branch; the full tokenizer is loaded when encoding a reference clip.
+`scripts/convert.py` also writes bf16, fp16, 4-bit, and a 345 MB build with embeddings and heads quantised too.
 
 ## Use
 
@@ -57,16 +56,15 @@ SamplerConfig(32, cache_refresh=0, uncond_every=1)  # official
 SamplerConfig(8, cache_refresh=4, uncond_every=1)   # the 8-step row above
 ```
 
-The reference clip is yours to supply — a recorded voice belongs to whoever spoke it, so none ships here. 3–4 s of
-clean mono, with a transcript that matches the audio (it goes into the prompt). `bench/` reads it from the
-environment:
+No reference clip ships here, bring your own: 3–4 s of clean mono, with a transcript that matches the audio (it
+goes into the prompt). `bench/` reads it from the environment:
 
 ```bash
 export OMNIVOICE_REF_WAV=assets/my-voice.wav
 export OMNIVOICE_REF_TEXT="what the clip says, punctuation included."
 ```
 
-## Where the speed comes from
+## Optimisations
 
 | technique | effect |
 |---|---|
@@ -74,7 +72,7 @@ export OMNIVOICE_REF_TEXT="what the clip says, punctuation included."
 | 32 → 16 steps | CER / speaker similarity / UTMOS unchanged |
 | prefix KV cache | the prompt's K/V is recomputed every 8 steps |
 | stale CFG | −20 %, same three metrics |
-| 8-bit weights | no speedup: each step's GEMM has M ≈ 200–400, bound by kernel dispatch; buys 1.99 → 1.56 GB resident |
+| 8-bit weights | 1.99 → 1.56 GB resident |
 
 ## Layout
 
