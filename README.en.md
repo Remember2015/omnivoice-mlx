@@ -89,7 +89,7 @@ omnivoice_mlx/
 ├── stream.py         # clause-ahead synthesis
 ├── textnorm.py       # text normalisation
 ├── kernels*.py       # custom Metal GEMM, off by default
-└── higgs/            # tokenizer, vendored from mlx-audio (MIT)
+└── higgs/            # tokenizer, vendored from mlx-audio
 server.py             # HTTP server, one worker + dynamic batching
 scripts/convert.py    # writes MLX weight directories
 bench/                # parity, timing, benchlock.sh
