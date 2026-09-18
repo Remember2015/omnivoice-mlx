@@ -86,9 +86,9 @@ B≥4 之后不再提升，再大只是多占内存；交互式场景用不上�
 
 ## 7. 长文本与假流式
 
-- **长文本**（`generate_long`）：304 字（估 46 s）切 4 块，s8-kv4 顺序 0.057、chunk batch 0.053。
+- **长文本**（`generate_long`）：304 字（估 46 s）切 4 块，8 步 + KV 每 4 步：顺序 0.057、chunk batch 0.053。
   chunk 并行只再省 6–8 %，每步已经 700+ token。整段 2.5 s 合成完。
-- **假流式**（`stream.py`）：按标点切分句，边合成边播放。304 字 → 22 句，s8-kv4 首音频 **165 ms**、s16-kv8 286 ms，
+- **假流式**（`stream.py`）：按标点切分句，边合成边播放。304 字 → 22 句，首音频 **165 ms**（8 步）/ 286 ms（16 步），
   断流 0 次。代价是分句边界的韵律接不上，总时长比整段合成多 10 %。
 - **分句续接**（没走通）：把上一句生成的 token 接进参考。UTMOS 2.949 → **2.653**（最低 1.29），还慢 10 %。
   `generate_stream(continuity=True)` 才启用。
@@ -175,8 +175,8 @@ export OMNIVOICE_REF_WAV=assets/my-voice.wav      # 自己的 3–4 s 干净单�
 export OMNIVOICE_REF_TEXT="它念的那句话，标点照写。"
 ```
 
-计时一律 `bench/benchlock.sh -- …`（排他锁 + 等空载）。变体名 `s<步数>[-kv<n>][-ue<n>]`；`uncond_every` 默认值
-后来从 1 改成 3，所以第 3、4 节表里的 `s8-kv4` 今天要写 `s8-kv4-ue1`。
+计时一律 `bench/benchlock.sh -- …`（排他锁 + 等空载）。变体名 `s<步数>[-kv<n>][-ue<n>]`，对应上面各表的三列。注意 `uncond_every` 的默认值
+后来从 1 改成 3，所以表里 uncond「每步」那几行今天要显式写 `-ue1`。
 
 | 节 | 命令 |
 |---|---|
