@@ -196,19 +196,26 @@ export OMNIVOICE_REF_WAV=assets/my-voice.wav      # 自己的 3–4 s 干净单�
 export OMNIVOICE_REF_TEXT="它念的那句话，标点照写。"
 ```
 
-计时一律 `bench/benchlock.sh -- …`（排他锁 + 等空载）。变体名 `s<步数>[-kv<n>][-ue<n>]`，对应上面各表的三列；
-`uncond_every` 的默认值是 3，所以表里 uncond 写「每步」的行要显式加 `-ue1`。
+变体名 `s<步数>[-kv<n>][-ue<n>]` 对应上面各表的三列；`uncond_every` 的默认值是 3，所以表里 uncond 写「每步」
+的行要显式加 `-ue1`。
 
-| 节 | 命令 |
-|---|---|
-| 1 移植正确性 | `.venv-ref/bin/python bench/parity_ref.py`，再 `.venv/bin/python bench/parity_mlx.py --dtype float32` |
-| 2 精度与量化 | `bench/bench_models.py --tag flavours --spec fp16=models/k2-fsa-OmniVoice:float16 q8fp16=models/mlx-q8-fp16`（多种权重装进同一进程交错） |
-| 3 采样 / 4 步数 / 5 隔步重算 | `bench/bench.py --tag steps --model models/mlx-q8-fp16 --variants s32 s16 s16-kv8-ue1 s16-kv8-ue3 s8-kv4-ue1 --runs 3` |
-| 6 多句 batch | `bench/bench_batch.py --model models/mlx-q8-fp16 --tag batch` |
-| 7 长文本 / 流式 | `bench/bench_long.py --tag long --model models/mlx-q8-fp16`、`bench/demo_stream.py --variant s8-kv4` |
-| 8 算子层 | `bench/profile_step.py`、`bench/mm_probe.py`、`bench/gpu_util.py --seconds 8`、`bench/test_sg_e2e.py` |
-| 11 与 mlx-audio | `bench/bench_mlxaudio.py --tag mlxaudio`（另需 `mlx-audio`，权重用 `scripts/convert.py` 转 bf16） |
-| 12 与官方 torch | `.venv-ref/bin/python bench/bench_ref_device.py --tag ref-dev --devices cpu mps --steps 8 32 --runs 3` |
+各节的数据分别来自：
+
+```bash
+L="bench/benchlock.sh --"                   # 排他锁 + 等空载，每条都要走
+PY=.venv/bin/python; REF=.venv-ref/bin/python
+M=models/mlx-q8-fp16
+
+$L $REF bench/parity_ref.py && $L $PY bench/parity_mlx.py --dtype float32                      # 1 移植正确性
+$L $PY bench/bench_models.py --tag flavours --spec fp16=models/k2-fsa-OmniVoice:float16 q8fp16=$M   # 2 精度与量化
+$L $PY bench/bench.py --tag steps --model $M --runs 3 \
+       --variants s32 s16 s16-kv8-ue1 s16-kv8-ue3 s8-kv4-ue1                                # 3 / 4 / 5 采样
+$L $PY bench/bench_batch.py --tag batch --model $M                                          # 6 多句 batch
+$L $PY bench/bench_long.py --tag long --model $M && $L $PY bench/demo_stream.py             # 7 长文本 / 流式
+$L $PY bench/profile_step.py && $L $PY bench/mm_probe.py && $L $PY bench/gpu_util.py        # 8 算子层
+$L $PY bench/bench_mlxaudio.py --tag mlxaudio                                               # 11 与 mlx-audio（另需 mlx-audio）
+$L $REF bench/bench_ref_device.py --tag ref-dev --devices cpu mps --steps 8 32 --runs 3     # 12 与官方 torch
+```
 
 官方实现要单独一个 venv：`uv venv --python 3.12 .venv-ref` 后装
 `torch==2.8.0 torchaudio==2.8.0 omnivoice soundfile`。
