@@ -13,7 +13,7 @@ fp32 下与官方实现逐 token 一致。
 | 本项目 | MLX | GPU | fp16 | 32 | 0.23 | 0.10 | 0.5–1.0 s | |
 | **本项目** | **MLX** | **GPU** | **8bit+fp16** | **16** | **0.106** | **≈0.08** | **0.23–0.44 s** | **默认** |
 | 本项目 | MLX | GPU | 8bit+fp16 | 16 | 0.080 | — | — | 打包 B=4–8 |
-| 本项目 | MLX | GPU | 8bit+fp16 | 8 | 0.075 | 0.057 | 0.16–0.32 s | 快档 |
+| 本项目 | MLX | GPU | 8bit+fp16 | 8 | 0.075 | 0.057 | 0.16–0.32 s | |
 
 M2 Max 12 核 / 38 核 GPU / 32 GB，macOS 26.6，MLX 0.32.2。测法、消融与负结果见
 [docs/research-log.md](docs/research-log.md)。
@@ -34,7 +34,7 @@ python -c "from omnivoice_mlx.codec import write_slim_decoder; write_slim_decode
 ```
 
 解码只用导出的这 44 MB 分支，完整 tokenizer 仅编码参考音时加载。
-其它档走 `scripts/convert.py`：bf16 / fp16 / 4-bit，以及嵌入和头全量化的 345 MB 档。
+`scripts/convert.py` 还能导出 bf16 / fp16 / 4-bit，以及嵌入和头一起量化的 345 MB 版本。
 
 ## 使用
 
@@ -47,7 +47,7 @@ r = tts.generate("今天天气不错，我们出去走走吧。", voice, languag
 ```
 
 `SamplerConfig()` 默认 `num_steps=16, cache_refresh=8, uncond_every=3`；官方采样
-`SamplerConfig(32, cache_refresh=0, uncond_every=1)`，快档 `SamplerConfig(8, cache_refresh=4)`。
+`SamplerConfig(32, cache_refresh=0, uncond_every=1)`，要更快用 `SamplerConfig(8, cache_refresh=4)`。
 另有 `generate_batch`（按长度分桶打包）、`generate_long`（官方分块路径）、
 `omnivoice_mlx.stream`（分句预生成，首音频 165 ms，零断流）。
 
