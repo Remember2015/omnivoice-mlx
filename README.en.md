@@ -10,9 +10,9 @@ transformers, and in fp32 it matches the official implementation token for token
 | official | torch | CPU | fp32 | fp32 | 32 | ≈2–3 | — | |
 | official | torch | MPS | fp32 | fp32 | 32 | 0.98 | — | |
 | mlx-audio | MLX | GPU | bf16 | bf16 | 32 | 0.68 | — | |
-| this port | MLX | GPU | 8-bit | fp16 | 32 | 0.381 | 0.5–1.0 s | |
-| **this port** | **MLX** | **GPU** | **8-bit** | **fp16** | **16** | **0.106** | **0.23–0.44 s** | **default** |
-| this port | MLX | GPU | 8-bit | fp16 | 16 | 0.080 | — | batched B=4–8 |
+| this port | MLX | GPU | int8 | fp16 | 32 | 0.381 | 0.5–1.0 s | |
+| **this port** | **MLX** | **GPU** | **int8** | **fp16** | **16** | **0.106** | **0.23–0.44 s** | **default** |
+| this port | MLX | GPU | int8 | fp16 | 16 | 0.080 | — | batched B=4–8 |
 
 M2 Max 12-core CPU / 38-core GPU / 32 GB, macOS 26.6, MLX 0.32.2. Method, ablations and dead ends are in
 [docs/research-log.md](docs/research-log.md) (Chinese).
@@ -65,7 +65,7 @@ export OMNIVOICE_REF_TEXT="what the clip says, punctuation included."
 
 ## Optimisations
 
-RTF as each step is added (three sentences pooled, 8-bit + fp16):
+RTF as each step is added (three sentences pooled, int8 weights + fp16 activations):
 
 | | RTF | CER / speaker sim / UTMOS |
 |---|---:|---|
@@ -74,7 +74,7 @@ RTF as each step is added (three sentences pooled, 8-bit + fp16):
 | + prefix KV cache, refreshed every 8 | 0.133 | unchanged |
 | + unconditional branch every 3 | **0.106** | unchanged |
 
-The M2 has no native bf16, so bf16 runs at fp32 speed and fp16 is 12–15 % faster than both. 8-bit weights are not a
+The M2 has no native bf16, so bf16 runs at fp32 speed and fp16 is 12–15 % faster than both. int8 weights are not a
 speedup; they buy 1.99 → 1.56 GB resident.
 
 ## Layout
