@@ -19,8 +19,7 @@ RTF =（unmask + codec 解码）/ 原始时长（T × 40 ms），不含后处理
 fp32 下 8 步确定性生成 3 句逐 token 100 % 一致，解码后波形时长和 RMS 与官方相同；参考音预处理同为 92 token
 （4 个 codebook 各差 1 个，RVQ 残差的浮点差）。
 
-bf16 / fp16 只有 15–25 % token 一致：迭代 unmask 是混沌过程，一处 argmax 翻转就会级联放大。精度的影响只能看
-CER / speaker similarity / UTMOS。
+bf16 / fp16 只有 15–25 % token 一致（迭代 unmask 是混沌过程），所以精度的影响只看 CER / speaker similarity / UTMOS。
 
 ## 2. 精度与量化：fp16 是关键，量化只省内存
 
@@ -36,7 +35,7 @@ CER / speaker similarity / UTMOS。
 | 4-bit g64 全量化 | fp16 | 1.11 GB | **345 MB** | 28.0 / 31.9 / 47.8 | 0.385 |
 
 - M2 的 GPU 无原生 bf16，MLX 靠转换模拟，fp16 快 12–15 %。
-- 量化更慢只对 bf16 激活成立。换 fp16 激活后，量化 matmul 在 M ≈ 200 行时略快、M ≈ 400 时持平。
+- 量化更慢只对 bf16 激活成立，换 fp16 激活后与 fp16 GEMM 持平或略快。
 - 每步约 15 ms 固定开销（行长 198 → 254 只多 7 %，254 → 391 多 44 %）：28 层 × ~26 个 kernel 的启动和调度。
 - 4-bit 全量化压到 345 MB，但 60 句里有 1 句错字率达 43 %，speaker similarity 低 0.01–0.02。默认取 8-bit + fp16。
 
@@ -83,7 +82,7 @@ fp16 单句，16 个变体同进程交错。
 | s12-kv6-ue2 | 0.086 | 0.83 % | 0.730 / 0.534 | 2.741 |
 | s10-kv5 | 0.089 | 1.07 %（1 句 25 %） | 0.747 / 0.626 | 2.732 |
 
-每 3 步算一次：行长 142 → 110，三个指标与基线同。与第 3 节 CFG 截断的区别：引导方向仍在，只是更新得慢。
+每 3 步算一次：行长 142 → 110，三个指标与基线同。
 **默认 `SamplerConfig(16, cache_refresh=8, uncond_every=3)`，RTF 0.106。**
 
 ## 6. 吞吐：多句 batch B=4–8 快 25 %
@@ -109,8 +108,8 @@ B≥4 之后不再提升，再大只是多占内存；交互式场景用不上�
   chunk 并行只再省 6–8 %，每步已经 700+ token。整段 2.5 s 合成完。
 - **假流式**（`stream.py`）：按标点切分句，边合成边播放。304 字 → 22 句，s8-kv4 首音频 **165 ms**、s16-kv8 286 ms，
   断流 0 次。代价是分句边界的韵律接不上，总时长比整段合成多 10 %。
-- **分句续接（负结果）**：把上一句自己生成的 token 接进参考，想让韵律跨过分句点。UTMOS 2.949 → **2.653**
-  （最低 1.29），还慢 10 %。模型自己的输出对它而言是分布外数据。`generate_stream(continuity=True)` 才启用。
+- **分句续接（负结果）**：把上一句生成的 token 接进参考。UTMOS 2.949 → **2.653**（最低 1.29），还慢 10 %。
+  `generate_stream(continuity=True)` 才启用。
 
 ## 8. 算子层已经没有余地
 
@@ -119,17 +118,16 @@ B≥4 之后不再提升，再大只是多占内存；交互式场景用不上�
 | 39 | 78 | 16.0 ms | 9.0 | 7.4 | 0.8 | 1.0 |
 | 126 | 252 | 33.4 | 16.9 | 17.7 | 1.5 | 2.5 |
 
-- 主线程 1–2.5 ms 不是瓶颈（`async_eval` 把它藏到了 GPU 后面）。四个 8-bit GEMM 占一步的 67 %（T=126 时 77 %）。
-- GPU 占用率 98–99 %，没有调度气泡；折算 5.9 TFLOPS（峰值 13.6 的 43 %），长块 7.1（52 %）。差的是小 M 下的
-  tile 利用率，不是排队。
+- 主线程 1–2.5 ms，不是瓶颈。四个 8-bit GEMM 占一步的 67 %（T=126 时 77 %）。
+- GPU 占用率 98–99 %，折算 5.9 TFLOPS（峰值 13.6 的 43 %），长块 7.1（52 %）。
 - 做过但没有收益：qkv / gate_up 沿 N 拼 GEMM + cond/uncond 排 batch-2 + 单次带 mask 的 SDPA（16.9 vs 17.3 ms/step，
   噪声内）；`mx.compile` 融合 elementwise 链（噪声内）；头 GEMM 改 fp16（UTMOS 2.794 vs 2.835，**弃**）。
   CFG 三次 log_softmax 合一次是代数恒等，~1 %。
 - **自定义 Metal GEMM 写了两代，性能都不及 MLX 内置的**：GEMV 式（`kernels.py`）慢 1.3–5 倍；simdgroup 版
   （`kernels_sg.py`，扫了 440 种 tile 组合）只在 M ≤ 80 且 N ≥ 4096 快 1.05–1.3×，其余慢 10–15 %，端到端只有
   7 字句快 6 %。代码留着（`custom_gemm=True` 启用），默认不用。
-- MLX 的量化 GEMM 唯一的结构性浪费是把 M 补到 32（M=32 → 33 时 56 → 90 µs），它的 mma 已经跑满峰值的 55–75 %。
-  单句延迟在算子层已无空间，收益只剩算法层（第 4、5 节）和多句 batch。
+- MLX 的量化 GEMM 唯一的结构性浪费是把 M 补到 32（M=32 → 33 时 56 → 90 µs），mma 已跑满峰值的 55–75 %。
+  单句延迟在算子层已无空间。
 
 ## 9. codec 瘦身：常驻 1.57 → 0.87 GB，同时去掉 transformers 依赖
 
@@ -165,10 +163,6 @@ codec vendor 进 `omnivoice_mlx/higgs/`（6 个文件，MIT），编码 token �
 | 本移植 bf16 | 35.8 / 38.3 / 56.9 | 0.469 |
 | 本移植 fp16 | 31.6 / 33.9 / 48.7 | 0.409 |
 
-差距在于少做了事，不是算子更快。mlx-audio：每步两次前向、head 对整行算 logits、每步 `mx.eval` 同步后 `concatenate`
-重建、argsort 两次。本移植：cond + uncond 一行一次前向、prompt 的 embedding 只算一次、头只算目标位、
-`argpartition` 求 rank、整步图交给 `async_eval`。
-
 ## 12. 官方 torch 在 MPS 上：能跑，本移植仍快 5 倍（2026-09-18）
 
 `bench/bench_ref_device.py`，同进程交错，MPS 计时前 `torch.mps.synchronize()`，**故意不设
@@ -186,14 +180,14 @@ codec vendor 进 `omnivoice_mlx/higgs/`（6 个文件，MIT），编码 token �
 
 - MPS 比 CPU 快 4.1 倍。torch 在 MPS 上 fp16 只比 fp32 快 5 %（MLX 里是 15 %），bf16 慢 29 %，与第 2 节一致。
 - 同精度同步数本移植快 5.0 倍（每步 126 → 29.6 ms）；算上 16 步 + kv8 + ue3，对 MPS 最快的一组是 9.6 倍
-  （1.136 → 0.118）。差在每步的固定开销：MLX 一步 28 层约 770 个 kernel 就提交完，torch MPS 每步多花 4–5 倍调度。
+  （1.136 → 0.118）。
 - 本移植 fp16 32 步在第 2 节是 0.409，这里同口径重测 0.227，中间的 fast path 和 batch 改动提了近 2 倍。
 
 ## 没做 / 想过不值得
 
-- **真流式**：架构上没有（NAR，整句一起 unmask），首包 = 整句耗时。分句并行能提高吞吐，但压不了首包。
-- **split-K 量化 GEMM**：N=1024 的形状并行度本来就不够，多一次 kernel 启动（10–14 µs）就把收益抵掉了。
-- **`mx.compile`**：可融合的只有几条 elementwise 链，≤ 5 %，且按段切片的整数会固化进图，要按 (P, T) 重 trace。
+- **真流式**：架构上没有（NAR，整句一起 unmask），首包 = 整句耗时。
+- **split-K 量化 GEMM**：多一次 kernel 启动（10–14 µs）就把收益抵掉了。
+- **`mx.compile`**：可融合的只有几条 elementwise 链，≤ 5 %。
 - 只测了中文单音色克隆；voice design（`instruct`）和其他语言接入了但没有评测。
 
 ## 复现
