@@ -6,14 +6,11 @@ RTF =（unmask + codec 解码）/ 原始时长，不含后处理；各变体同�
 
 ## 1. 移植正确性
 
-fp32 下 8 步确定性生成 3 句逐 token 100 % 一致，解码后波形时长和 RMS 与官方相同；参考音预处理同为 92 token
-（4 个 codebook 各差 1 个，RVQ 残差的浮点差）。
+fp32 下 8 步确定性生成逐 token 与官方 100 % 一致，解码后波形时长和 RMS 也相同。
 
 bf16 / fp16 只有 15–25 % token 一致（迭代 unmask 是混沌过程），所以精度的影响只看 CER / speaker similarity / UTMOS。
 
 ## 2. 精度与量化：fp16 是关键，量化只省内存
-
-3 句（T = 39 / 63 / 126）× 3 轮中位数，同进程交错。
 
 | 权重 | 激活 | 常驻 | 权重文件 | 32 步 ms/step（短/中/长） | RTF 32 步 |
 |---|---|---:|---:|---|---:|
@@ -31,7 +28,7 @@ bf16 / fp16 只有 15–25 % token 一致（迭代 unmask 是混沌过程），�
 
 ## 3. 三种加速采样的尝试：只有 KV cache 可用
 
-fp16 单句，16 个变体同进程交错。
+fp16，16 个变体。
 
 | 手段 | 做法 | 结果 |
 |---|---|---|
@@ -41,7 +38,7 @@ fp16 单句，16 个变体同进程交错。
 
 ## 4. 步数：16 步与 32 步等效，8 步自然度下降，6 步是下限
 
-`models/mlx-q8-fp16`，3 句 × 3 轮计时 + 20 句 × 3 轮质量（n = 60）。
+8-bit + fp16，质量 n = 60。
 
 | 变体 | 每步 ms（短/中/长） | RTF | CER | sim 均值 / 最低 | UTMOS |
 |---|---|---:|---:|---|---:|
@@ -129,8 +126,7 @@ codec vendor 进 `omnivoice_mlx/higgs/`（6 个文件，MIT），编码 token �
 
 ## 10. text normalization：CER 从 7.09 % 降到 0.33 %
 
-34 句覆盖年份、小数、百分比、金额、温度、时间、日期、电话、分数、单位；「底噪」一列是直接合成手写口语形式，
-即 TTS + ASR 自身的误差。
+34 句覆盖年份、小数、百分比、金额、温度、时间、日期、电话、分数、单位。「底噪」是直接合成手写口语形式的结果。
 
 | | 原文 | zh_normalization 底座 | wetext 裸跑 | **wetext + 修补** | 底噪 |
 |---|---:|---:|---:|---:|---:|
@@ -145,8 +141,6 @@ codec vendor 进 `omnivoice_mlx/higgs/`（6 个文件，MIT），编码 token �
 
 ## 11. 对比 mlx-audio 的移植：每步快 26–44 %
 
-同参考音、同目标长度、同 3 句、同步数、同计时定义。
-
 | | 每步 ms（短/中/长） | RTF 32 步 |
 |---|---|---:|
 | mlx-audio bf16 | 56.8 / 58.6 / 77.3 | 0.680 |
@@ -155,8 +149,8 @@ codec vendor 进 `omnivoice_mlx/higgs/`（6 个文件，MIT），编码 token �
 
 ## 12. 官方 torch 在 MPS 上：能跑，本移植仍快 5 倍（2026-09-18）
 
-`bench/bench_ref_device.py`，同进程交错，MPS 计时前 `torch.mps.synchronize()`。未设
-`PYTORCH_ENABLE_MPS_FALLBACK`，全程没有算子回落 CPU；codec 是官方在 MPS 上强制留在 CPU 的。
+`bench/bench_ref_device.py`，MPS 计时前 `torch.mps.synchronize()`。未设 `PYTORCH_ENABLE_MPS_FALLBACK`，
+全程没有算子回落 CPU；codec 是官方在 MPS 上强制留在 CPU 的。
 
 | 栈 | 精度 | RTF 32 步 | RTF 8 步 | 每步 ms（短/中/长） |
 |---|---|---:|---:|---|
