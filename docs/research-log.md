@@ -1,16 +1,8 @@
 安装和用法见 [../README.md](../README.md)。本文是测量记录，负结果一并保留。
 
 测试环境：M2 Max（12 核 CPU / 38 核 GPU / 32 GB），macOS 26.6，MLX 0.32.2。
-
-## 方法
-
-RTF =（unmask + codec 解码）/ 原始时长（T × 40 ms），不含后处理。同进程交错各变体、3 轮中位数、走 `benchlock.sh`
-等空载；绝对值随负载漂 10–40 %，只比同进程交错的数。
-
-质量是 20 句中文集：Fun-ASR-Nano 回读算 CER、CAM++ 算相似度、UTMOS22-strong 算自然度，三个模型都不在本仓库，
-绝对值不能跨套比。参考音 3.7 s，2026-09-16 换过一版（去了背景音乐），前后的质量数不能混比。
-
-变体名 `s<步数>[-kv<n>][-ue<n>]`。`uncond_every` 默认值后来从 1 改成 3，早期表里的 `s8-kv4` 今天要写 `s8-kv4-ue1`。
+RTF =（unmask + codec 解码）/ 原始时长，不含后处理；各变体同进程交错、3 轮中位数，绝对值随负载漂 10–40 %。
+质量三项分别由 Fun-ASR-Nano、CAM++、UTMOS22-strong 量，这三个模型不在本仓库，绝对值不能跨套比。
 
 ## 1. 移植正确性
 
@@ -199,11 +191,12 @@ export OMNIVOICE_REF_WAV=assets/my-voice.wav
 export OMNIVOICE_REF_TEXT="它念的那句话，标点照写。"
 
 bench/benchlock.sh -- .venv/bin/python bench/bench.py --tag demo --model models/mlx-q8-fp16 --variants s32 s16-kv8-ue3 s8-kv4-ue1 --runs 3
+# 变体名 s<步数>[-kv<n>][-ue<n>]；uncond_every 默认值后来从 1 改成 3，早期表里的 s8-kv4 今天要写 s8-kv4-ue1
 .venv/bin/python bench/test_thread.py                                             # 工作线程里跑不炸（MLX 跨线程懒数组）
 ```
 
 与官方实现比对：`.venv-ref` 装 `torch==2.8.0 torchaudio==2.8.0 omnivoice soundfile`，跑 `bench/parity_ref.py`
-和 `bench/parity_mlx.py --dtype float32`。CER / speaker similarity / UTMOS 要你自己的三个模型，见「方法」。
+和 `bench/parity_mlx.py --dtype float32`。CER / speaker similarity / UTMOS 要你自己的 ASR / speaker / MOS 模型。
 
 ## 许可
 
