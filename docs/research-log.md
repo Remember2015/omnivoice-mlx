@@ -2,7 +2,7 @@
 
 测试环境：M2 Max（12 核 CPU / 38 核 GPU / 32 GB），macOS 26.6，MLX 0.32.2。
 RTF =（unmask + codec 解码）/ 原始时长，同进程交错取 3 轮中位数，绝对值随负载漂 10–40 %；
-CER / speaker similarity / UTMOS 由 Fun-ASR-Nano / CAM++ / UTMOS22-strong 量，不同套之间不可比。
+CER / speaker similarity / UTMOS 由 Fun-ASR-Nano / CAM++ / UTMOS22-strong 量，换一套模型数值就不一样。
 
 ## 1. 移植正确性
 
