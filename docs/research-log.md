@@ -165,9 +165,8 @@ codec vendor 进 `omnivoice_mlx/higgs/`（6 个文件，MIT），编码 token �
 
 ## 12. 官方 torch 在 MPS 上：能跑，本移植仍快 5 倍（2026-09-18）
 
-`bench/bench_ref_device.py`，同进程交错，MPS 计时前 `torch.mps.synchronize()`，**故意不设
-`PYTORCH_ENABLE_MPS_FALLBACK`** 以便不支持的算子直接抛错（全程没抛）。官方在 MPS 上把 codec 留在 CPU
-（卷积输出通道 > 65536），所以 decode 是 CPU 时间。
+`bench/bench_ref_device.py`，同进程交错，MPS 计时前 `torch.mps.synchronize()`。未设
+`PYTORCH_ENABLE_MPS_FALLBACK`，全程没有算子回落 CPU；codec 是官方在 MPS 上强制留在 CPU 的。
 
 | 栈 | 精度 | RTF 32 步 | RTF 8 步 | 每步 ms（短/中/长） |
 |---|---|---:|---:|---|
