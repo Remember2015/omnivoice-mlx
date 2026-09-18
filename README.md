@@ -54,7 +54,7 @@ SamplerConfig(32, cache_refresh=0, uncond_every=1)  # 官方
 SamplerConfig(8, cache_refresh=4, uncond_every=1)   # 表里 8 步那行
 ```
 
-参考音需要自己准备，仓库里不带：3–4 s 干净单声道，转写要与音频一致（它会进 prompt）。`bench/` 走环境变量：
+参考音需要自己准备，仓库里不带：3–4 s 干净单声道，转写要与音频一致，它会进 prompt。`bench/` 走环境变量：
 
 ```bash
 export OMNIVOICE_REF_WAV=assets/my-voice.wav
@@ -72,8 +72,7 @@ export OMNIVOICE_REF_TEXT="它念的那句话，标点照写。"
 | + 前缀 KV cache，每 8 步重算 | 0.133 | 不变 |
 | + uncond 每 3 步重算 | **0.106** | 不变 |
 
-精度上 fp16 比 bf16 快 12–15 %（M2 无原生 bf16，bf16 与 fp32 同速）；8-bit 量化不提速，省的是常驻内存
-1.99 → 1.56 GB。
+M2 没有原生 bf16，bf16 与 fp32 同速，fp16 比它们快 12–15 %。8-bit 量化不提速，省的是常驻内存 1.99 → 1.56 GB。
 
 ## 目录
 

@@ -55,8 +55,8 @@ SamplerConfig(32, cache_refresh=0, uncond_every=1)  # official
 SamplerConfig(8, cache_refresh=4, uncond_every=1)   # the 8-step row above
 ```
 
-No reference clip ships here, bring your own: 3–4 s of clean mono, with a transcript that matches the audio (it
-goes into the prompt). `bench/` reads it from the environment:
+No reference clip ships here, bring your own: 3–4 s of clean mono, with a transcript that matches the audio, which
+goes into the prompt. `bench/` reads it from the environment:
 
 ```bash
 export OMNIVOICE_REF_WAV=assets/my-voice.wav
@@ -74,8 +74,8 @@ RTF as each step is added (three sentences pooled, 8-bit + fp16):
 | + prefix KV cache, refreshed every 8 | 0.133 | unchanged |
 | + unconditional branch every 3 | **0.106** | unchanged |
 
-fp16 activations are 12–15 % faster than bf16 (the M2 has no native bf16, so bf16 runs at fp32 speed). 8-bit weights
-are not a speedup; they buy 1.99 → 1.56 GB resident.
+The M2 has no native bf16, so bf16 runs at fp32 speed and fp16 is 12–15 % faster than both. 8-bit weights are not a
+speedup; they buy 1.99 → 1.56 GB resident.
 
 ## Layout
 
