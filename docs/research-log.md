@@ -1,8 +1,8 @@
-安装和用法见 [../README.md](../README.md)。本文是测量记录，负结果一并保留。
+安装和用法见 [../README.md](../README.md)。本文是测量记录，没走通的尝试也记着。
 
 测试环境：M2 Max（12 核 CPU / 38 核 GPU / 32 GB），macOS 26.6，MLX 0.32.2。
-RTF =（unmask + codec 解码）/ 原始时长，不含后处理；各变体同进程交错、3 轮中位数，绝对值随负载漂 10–40 %。
-质量三项分别由 Fun-ASR-Nano、CAM++、UTMOS22-strong 量，这三个模型不在本仓库，绝对值不能跨套比。
+RTF =（unmask + codec 解码）/ 原始时长，同进程交错取 3 轮中位数，绝对值随负载漂 10–40 %；
+CER / speaker similarity / UTMOS 由 Fun-ASR-Nano / CAM++ / UTMOS22-strong 量，不同套之间不可比。
 
 ## 1. 移植正确性
 
@@ -94,7 +94,7 @@ B≥4 之后不再提升，再大只是多占内存；交互式场景用不上�
   chunk 并行只再省 6–8 %，每步已经 700+ token。整段 2.5 s 合成完。
 - **假流式**（`stream.py`）：按标点切分句，边合成边播放。304 字 → 22 句，s8-kv4 首音频 **165 ms**、s16-kv8 286 ms，
   断流 0 次。代价是分句边界的韵律接不上，总时长比整段合成多 10 %。
-- **分句续接（负结果）**：把上一句生成的 token 接进参考。UTMOS 2.949 → **2.653**（最低 1.29），还慢 10 %。
+- **分句续接**（没走通）：把上一句生成的 token 接进参考。UTMOS 2.949 → **2.653**（最低 1.29），还慢 10 %。
   `generate_stream(continuity=True)` 才启用。
 
 ## 8. 算子层
@@ -185,13 +185,13 @@ export OMNIVOICE_REF_TEXT="它念的那句话，标点照写。"
 | 节 | 命令 |
 |---|---|
 | 1 移植正确性 | `.venv-ref/bin/python bench/parity_ref.py`，再 `.venv/bin/python bench/parity_mlx.py --dtype float32` |
-| 2 精度与量化 | `bench/bench_models.py --tag flavours`（四种权重装进同一进程交错） |
-| 3 采样 / 4 步数 / 5 隔步重算 | `bench/bench.py --model models/mlx-q8-fp16 --variants s32 s16 s16-kv8-ue1 s16-kv8-ue3 s8-kv4-ue1 --runs 3` |
+| 2 精度与量化 | `bench/bench_models.py --tag flavours --spec fp16=models/k2-fsa-OmniVoice:float16 q8fp16=models/mlx-q8-fp16`（多种权重装进同一进程交错） |
+| 3 采样 / 4 步数 / 5 隔步重算 | `bench/bench.py --tag steps --model models/mlx-q8-fp16 --variants s32 s16 s16-kv8-ue1 s16-kv8-ue3 s8-kv4-ue1 --runs 3` |
 | 6 多句 batch | `bench/bench_batch.py --model models/mlx-q8-fp16 --tag batch` |
-| 7 长文本 / 假流式 | `bench/bench_long.py --model models/mlx-q8-fp16`、`bench/demo_stream.py --variant s8-kv4` |
+| 7 长文本 / 假流式 | `bench/bench_long.py --tag long --model models/mlx-q8-fp16`、`bench/demo_stream.py --variant s8-kv4` |
 | 8 算子层 | `bench/profile_step.py`、`bench/mm_probe.py`、`bench/gpu_util.py --seconds 8`、`bench/test_sg_e2e.py` |
-| 11 与 mlx-audio | `bench/bench_mlxaudio.py --model models/mlxaudio-bf16`（另需 `mlx-audio`） |
-| 12 与官方 torch | `.venv-ref/bin/python bench/bench_ref_device.py --devices cpu mps --steps 8 32 --runs 3` |
+| 11 与 mlx-audio | `bench/bench_mlxaudio.py --tag mlxaudio`（另需 `mlx-audio`，权重用 `scripts/convert.py` 转 bf16） |
+| 12 与官方 torch | `.venv-ref/bin/python bench/bench_ref_device.py --tag ref-dev --devices cpu mps --steps 8 32 --runs 3` |
 
 官方实现要单独一个 venv：`uv venv --python 3.12 .venv-ref` 后装
 `torch==2.8.0 torchaudio==2.8.0 omnivoice soundfile`。
