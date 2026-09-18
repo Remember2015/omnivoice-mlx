@@ -6,13 +6,13 @@ CER、speaker similarity、UTMOS 分别用 Fun-ASR-Nano、CAM++、UTMOS22-strong
 
 ## 结果
 
-| 对照 | 框架 | 设备 | 精度 | 步数 | RTF 短句 | 整句延迟 |
-|---|---|---|---|---:|---:|---|
-| 官方 | torch | CPU | fp32 | 32 | ≈2–3 | — |
-| 官方 | torch | MPS | fp32 | 32 | 0.98 | — |
-| mlx-audio | MLX | GPU | bf16 | 32 | 0.68 | — |
+| 对照 | 框架 | 设备 | 精度 | 步数 | RTF 短句 |
+|---|---|---|---|---:|---:|
+| 官方 | torch | CPU | fp32 | 32 | ≈2–3 |
+| 官方 | torch | MPS | fp32 | 32 | 0.98 |
+| mlx-audio | MLX | GPU | bf16 | 32 | 0.68 |
 
-本项目，8-bit + fp16，列名就是 `SamplerConfig` 的参数（`cache_refresh=0` 表示不用 KV cache）：
+本项目，8-bit + fp16，列名是 `SamplerConfig` 的参数（`cache_refresh=0` 表示不用 KV cache）：
 
 | num_steps | cache_refresh | uncond_every | RTF 短句 | 整句延迟 | CER | sim | UTMOS | |
 |---:|---:|---:|---:|---|---:|---:|---:|---|
@@ -81,7 +81,7 @@ bf16 / fp16 只有 15–25 % token 一致，所以精度的影响只看 CER / sp
 | 12 | 6 | 2 | 0.086 | 0.83 % | 0.730 / 0.534 | 2.741 |
 | 10 | 5 | 1 | 0.089 | 1.07 %（1 句 25 %） | 0.747 / 0.626 | 2.732 |
 
-每步一行从 142 降到 110 token，三项指标与基线一致。
+一行从 142 降到 110 token，三项指标与基线一致。
 **默认 `SamplerConfig(16, cache_refresh=8, uncond_every=3)`，RTF 0.106。**
 
 ## 6. 多句 batch
@@ -103,9 +103,9 @@ B≥4 之后不再提升，再大只是多占内存。交互式场景用不上�
 
 ## 7. 长文本与流式
 
-- **长文本** `generate_long`：304 字、约 46 s，切 4 块，8 步 + KV 每 4 步：顺序 0.057、chunk batch 0.053。
+- **长文本** `generate_long`：304 字、约 46 s，切 4 块，`num_steps=8, cache_refresh=4` 下顺序 0.057、chunk batch 0.053。
   chunk 并行只再省 6–8 %，每步已经 700+ token。整段 2.5 s 合成完。
-- **流式** `stream.py`：按标点切分句，边合成边播放。304 字 → 22 句，首音频 **165 ms**（8 步）/ 286 ms（16 步），
+- **流式** `stream.py`：按标点切分句，边合成边播放。304 字 → 22 句，首音频 **165 ms**（8 步）、286 ms（16 步），
   断流 0 次。代价是分句边界的韵律接不上，总时长比整段合成多 10 %。
 - **分句续接**（没走通）：把上一句生成的 token 接进参考。UTMOS 2.949 → **2.653**，还慢 10 %。
   默认关，`generate_stream(continuity=True)` 可开。
@@ -120,18 +120,7 @@ B≥4 之后不再提升，再大只是多占内存。交互式场景用不上�
 | 126 | 252 | 33.4 | 16.9 | 17.7 | 1.5 | 2.5 |
 
 四个 8-bit GEMM 占一步的 67 %，T=126 时 77 %。GPU 占用率 98–99 %；GEMM 速率 5.9 TFLOPS，是峰值 13.6 的 43 %，
-长文本时 7.1、52 %。
-
-试过的改动：
-
-| 改动 | 结果 | |
-|---|---|---|
-| 三项一起：qkv / gate_up 沿 N 拼成一个 GEMM、cond/uncond 排成 batch-2、单次带 mask 的 SDPA | 16.9 vs 17.3 ms/step，噪声内 | ❌ |
-| `mx.compile` 融合 elementwise 链 | 噪声内 | ❌ |
-| 头 GEMM 改 fp16 | UTMOS 2.794 vs 2.835 | ❌ |
-| CFG 三次 log_softmax 合一次 | 代数恒等，~1 % | ✅ |
-| 自定义 Metal GEMM，GEMV 式（`kernels.py`） | 慢 1.3–5 倍 | ❌ |
-| 自定义 Metal GEMM，simdgroup（`kernels_sg.py`） | M ≤ 80 且 N ≥ 4096 快 1.05–1.3×，其余慢 10–15 %；端到端只有 7 字句快 6 % | ❌ |
+长文本时 7.1，占 52 %。
 
 MLX 的量化 GEMM mma 已跑满峰值的 55–75 %，唯一的浪费是把 M 补到 32：M=32 → 33 时耗时从 56 跳到 90 µs。
 单句延迟在算子层已无空间。
