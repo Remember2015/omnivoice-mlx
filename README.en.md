@@ -9,6 +9,7 @@ transformers, and in fp32 it matches the official implementation token for token
 |---|---|---|---|---:|---:|---:|---:|---|
 | official | torch | CPU | fp32 | 32 | ≈2–3 | — | — | |
 | official | torch | MPS | fp32 | 32 | 0.98 | — | — | |
+| mlx-audio | MLX | GPU | bf16 | 32 | 0.68 | — | — | |
 | this port | MLX | GPU | 8bit+fp16 | 32 | 0.381 | 0.25 | 0.5–1.0 s | |
 | **this port** | **MLX** | **GPU** | **8bit+fp16** | **16** | **0.106** | **≈0.08** | **0.23–0.44 s** | **default** |
 | this port | MLX | GPU | 8bit+fp16 | 16 | 0.080 | — | — | batched B=4–8 |
