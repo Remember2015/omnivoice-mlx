@@ -66,13 +66,17 @@ export OMNIVOICE_REF_TEXT="what the clip says, punctuation included."
 
 ## Optimisations
 
-| technique | effect |
-|---|---|
-| fp16 activations | 12–15 % faster; the M2 has no native bf16, so bf16 runs at fp32 speed |
-| 32 → 16 steps | CER / speaker similarity / UTMOS unchanged |
-| prefix KV cache | the prompt's K/V is recomputed every 8 steps |
-| stale CFG | 20 % faster, same three metrics |
-| 8-bit weights | 1.99 → 1.56 GB resident |
+RTF as each step is added (three sentences pooled, 8-bit + fp16):
+
+| | RTF | CER / speaker sim / UTMOS |
+|---|---:|---|
+| 32 steps, no KV cache | 0.381 | baseline |
+| 32 → 16 steps | 0.194 | unchanged |
+| + prefix KV cache, refreshed every 8 | 0.133 | unchanged |
+| + unconditional branch every 3 | **0.106** | unchanged |
+
+fp16 activations are 12–15 % faster than bf16 (the M2 has no native bf16, so bf16 runs at fp32 speed). 8-bit weights
+are not a speedup; they buy 1.99 → 1.56 GB resident.
 
 ## Layout
 
