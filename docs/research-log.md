@@ -168,8 +168,8 @@ MLX 的量化 GEMM mma 已跑满峰值的 55–75 %，唯一的浪费是把 M �
 ## 12. 与官方 torch 的对比（CPU / MPS）
 
 `bench/bench_ref_device.py`，MPS 计时前 `torch.mps.synchronize()`。未设 `PYTORCH_ENABLE_MPS_FALLBACK`，
-全程没有算子回落 CPU；codec 是官方在 MPS 上强制留在 CPU 的。这一轮两份模型同进程，CPU 那行比单独跑时高
-（上面「结果」里是 ≈2–3）。
+全程没有算子回落 CPU；codec 是官方在 MPS 上强制留在 CPU 的。这组数两份模型同进程，CPU 那行比单独跑时高
+（单独跑约 2–3，见「结果」）。
 
 | 栈 | 精度 | RTF 32 步 | RTF 8 步 | 每步 ms（短/中/长） |
 |---|---|---:|---:|---|
@@ -196,8 +196,8 @@ export OMNIVOICE_REF_WAV=assets/my-voice.wav      # 自己的 3–4 s 干净单�
 export OMNIVOICE_REF_TEXT="它念的那句话，标点照写。"
 ```
 
-计时一律 `bench/benchlock.sh -- …`（排他锁 + 等空载）。变体名 `s<步数>[-kv<n>][-ue<n>]`，对应上面各表的三列。注意 `uncond_every` 的默认值
-后来从 1 改成 3，所以表里 uncond「每步」那几行今天要显式写 `-ue1`。
+计时一律 `bench/benchlock.sh -- …`（排他锁 + 等空载）。变体名 `s<步数>[-kv<n>][-ue<n>]`，对应上面各表的三列。`uncond_every` 的默认值是 3，所以表里 uncond 写
+「每步」的行要显式加 `-ue1`。
 
 | 节 | 命令 |
 |---|---|
