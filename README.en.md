@@ -76,7 +76,8 @@ RTF as each step is added (three sentences pooled, int8 weights + fp16 activatio
 | + unconditional branch every 3 | **0.106** | unchanged |
 
 The M2 has no native bf16, so bf16 runs at fp32 speed and fp16 is 12–15 % faster than both. int8 weights are not a
-speedup; they buy 1.99 → 1.56 GB resident.
+speedup; they buy 1.99 → 1.56 GB resident. The eight codebook output heads are left in fp32: fp16 there buys no
+speed and drops UTMOS from 2.835 to 2.794.
 
 ## Layout
 
