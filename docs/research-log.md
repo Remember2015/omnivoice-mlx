@@ -27,17 +27,13 @@ bf16 / fp16 只有 15–25 % token 一致，所以精度的影响只看 CER / sp
 
 ## 3. 采样：KV cache、CFG 截断、置信度阈值
 
-fp16，16 个变体。
-
 | 手段 | 做法 | 每步耗时 | CER | speaker sim | |
 |---|---|---|---|---|---|
-| **前缀 KV cache** | prompt 的 K/V 每 n 步算一次 | −30～37 %（行长 198 → 93） | 不变 | −0.01～−0.02 | **用** |
-| CFG 截断 | 后半步不跑 uncond 分支 | −12～18 % | 出错字 | −0.05～−0.08（最低 0.52） | 弃 |
-| 置信度阈值提前揭示 | 超阈值的位提前定下来 | +5～13 % | — | — | 弃 |
+| **前缀 KV cache** | prompt 的 K/V 每 n 步算一次 | −30～37 %（行长 198 → 93） | 不变 | −0.01～−0.02 | ✅ |
+| CFG 截断 | 后半步不跑 uncond 分支 | −12～18 % | 出错字 | −0.05～−0.08（最低 0.52） | ❌ |
+| 置信度阈值提前揭示 | 超阈值的位提前定下来 | +5～13 % | — | — | ❌ |
 
 ## 4. 步数
-
-8-bit + fp16，质量 n = 60。
 
 | 变体 | 每步 ms（短/中/长） | RTF | CER | sim 均值 / 最低 | UTMOS |
 |---|---|---:|---:|---|---:|
@@ -109,14 +105,14 @@ B≥4 之后不再提升，再大只是多占内存；交互式场景用不上�
 
 试过的改动：
 
-| 改动 | 结果 |
-|---|---|
-| qkv / gate_up 沿 N 拼 GEMM、cond/uncond 排 batch-2、单次带 mask 的 SDPA | 16.9 vs 17.3 ms/step，噪声内 |
-| `mx.compile` 融合 elementwise 链 | 噪声内 |
-| 头 GEMM 改 fp16 | UTMOS 2.794 vs 2.835，弃 |
-| CFG 三次 log_softmax 合一次 | 代数恒等，~1 % |
-| 自定义 Metal GEMM，GEMV 式（`kernels.py`） | 慢 1.3–5 倍 |
-| 自定义 Metal GEMM，simdgroup（`kernels_sg.py`，扫了 440 种 tile 组合） | M ≤ 80 且 N ≥ 4096 快 1.05–1.3×，其余慢 10–15 %；端到端只有 7 字句快 6 %，默认不用 |
+| 改动 | 结果 | |
+|---|---|---|
+| qkv / gate_up 沿 N 拼 GEMM、cond/uncond 排 batch-2、单次带 mask 的 SDPA | 16.9 vs 17.3 ms/step，噪声内 | ❌ |
+| `mx.compile` 融合 elementwise 链 | 噪声内 | ❌ |
+| 头 GEMM 改 fp16 | UTMOS 2.794 vs 2.835 | ❌ |
+| CFG 三次 log_softmax 合一次 | 代数恒等，~1 % | ✅ |
+| 自定义 Metal GEMM，GEMV 式（`kernels.py`） | 慢 1.3–5 倍 | ❌ |
+| 自定义 Metal GEMM，simdgroup（`kernels_sg.py`，扫了 440 种 tile 组合） | M ≤ 80 且 N ≥ 4096 快 1.05–1.3×，其余慢 10–15 %；端到端只有 7 字句快 6 % | ❌ |
 
 MLX 的量化 GEMM mma 已跑满峰值的 55–75 %，唯一的浪费是把 M 补到 32（M=32 → 33 时 56 → 90 µs）。
 单句延迟在算子层已无空间。
