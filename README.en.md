@@ -32,7 +32,8 @@ ln -s ../k2-fsa-OmniVoice/audio_tokenizer models/mlx-q8-fp16/audio_tokenizer
 python -c "from omnivoice_mlx.codec import write_slim_decoder; write_slim_decoder('models/mlx-q8-fp16', 'float16')"
 ```
 
-Decoding reads only that 44 MB branch; the full tokenizer is loaded when encoding a reference clip.
+That last command writes the 44 MB decode branch, which is all inference reads; the full tokenizer is loaded when
+encoding a reference clip.
 `scripts/convert.py` also writes bf16, fp16 and fp32.
 
 ## Use
@@ -46,17 +47,16 @@ voice = tts.make_prompt("my-voice.wav", "exactly what that clip says.")
 
 r = tts.generate("今天天气不错，我们出去走走吧。", voice)   # r.audio: float32 24 kHz, r.rtf
 tts.generate_batch(["第一句。", "第二句。"], voice, max_batch=4)
-tts.generate_long(paragraph, voice)                      # official chunking path
+tts.generate_long(paragraph, voice)                      # long text, split at punctuation
 for piece in generate_stream(tts, paragraph, voice):     # clause-ahead, 165 ms to first audio
     play(piece.audio)
 
 SamplerConfig()                                     # num_steps=16, cache_refresh=8, uncond_every=3
 SamplerConfig(32, cache_refresh=0, uncond_every=1)  # official
-SamplerConfig(8, cache_refresh=4, uncond_every=1)   # the 8-step row above
+SamplerConfig(8, cache_refresh=4, uncond_every=1)   # faster, slightly less natural
 ```
 
-No reference clip ships here, bring your own: 3–4 s of clean mono, with a transcript that matches the audio, which
-goes into the prompt. `bench/` reads it from the environment:
+No reference clip ships here, bring your own: 3–4 s of clean mono, with a transcript that matches the audio. `bench/` reads it from the environment:
 
 ```bash
 export OMNIVOICE_REF_WAV=assets/my-voice.wav
@@ -88,7 +88,7 @@ omnivoice_mlx/
 ├── codec.py          # Higgs codec
 ├── stream.py         # clause-ahead synthesis
 ├── textnorm.py       # text normalisation
-├── kernels*.py       # custom Metal GEMM, only wins on some shapes, off by default
+├── kernels*.py       # custom Metal GEMM, off by default
 └── higgs/            # tokenizer, vendored from mlx-audio (MIT)
 scripts/convert.py    # writes MLX weight directories
 bench/                # parity, timing, benchlock.sh

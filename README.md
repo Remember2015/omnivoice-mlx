@@ -23,7 +23,7 @@ pip install git+https://github.com/Remember2015/omnivoice-mlx
 hf download remember2015/omnivoice-mlx-q8-fp16 --local-dir models/mlx-q8-fp16
 ```
 
-codec 权重另有许可，不在上面那份里，从上游下载：
+codec 权重另有许可，不在上面那份权重里，从上游下载：
 
 ```bash
 hf download k2-fsa/OmniVoice --local-dir models/k2-fsa-OmniVoice
@@ -31,7 +31,7 @@ ln -s ../k2-fsa-OmniVoice/audio_tokenizer models/mlx-q8-fp16/audio_tokenizer
 python -c "from omnivoice_mlx.codec import write_slim_decoder; write_slim_decoder('models/mlx-q8-fp16', 'float16')"
 ```
 
-解码只用导出的这 44 MB 分支，完整 tokenizer 只在编码参考音时加载。
+最后那条命令导出 44 MB 的解码分支，推理只用它；完整 tokenizer 只在编码参考音时加载。
 `scripts/convert.py` 还能导出 bf16 / fp16 / fp32。
 
 ## 使用
@@ -45,16 +45,16 @@ voice = tts.make_prompt("my-voice.wav", "这段录音念的那句话，标点照
 
 r = tts.generate("今天天气不错，我们出去走走吧。", voice)   # r.audio: float32 24 kHz；r.rtf
 tts.generate_batch(["第一句。", "第二句。"], voice, max_batch=4)
-tts.generate_long(paragraph, voice)                      # 官方 chunk 路径
+tts.generate_long(paragraph, voice)                      # 长文本，按标点切块
 for piece in generate_stream(tts, paragraph, voice):     # 分句预生成，首音频 165 ms
     play(piece.audio)
 
 SamplerConfig()                                     # num_steps=16, cache_refresh=8, uncond_every=3
 SamplerConfig(32, cache_refresh=0, uncond_every=1)  # 官方
-SamplerConfig(8, cache_refresh=4, uncond_every=1)   # 表里 8 步那行
+SamplerConfig(8, cache_refresh=4, uncond_every=1)   # 更快，自然度略降
 ```
 
-参考音需要自己准备，仓库里不带：3–4 s 干净单声道，转写要与音频一致，它会进 prompt。`bench/` 走环境变量：
+参考音需要自己准备，仓库里不带：3–4 s 干净单声道，转写要与音频一致。`bench/` 走环境变量：
 
 ```bash
 export OMNIVOICE_REF_WAV=assets/my-voice.wav
@@ -85,7 +85,7 @@ omnivoice_mlx/
 ├── codec.py          # Higgs codec
 ├── stream.py         # 分句预生成
 ├── textnorm.py       # text normalization
-├── kernels*.py       # 自定义 Metal GEMM，只在特定形状上更快，默认不用
+├── kernels*.py       # 自定义 Metal GEMM，默认不用
 └── higgs/            # tokenizer，vendor 自 mlx-audio（MIT）
 scripts/convert.py    # 导出 MLX 权重
 bench/                # parity、计时、benchlock.sh
