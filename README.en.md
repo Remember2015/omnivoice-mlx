@@ -80,25 +80,25 @@ export OMNIVOICE_REF_TEXT="what the clip says, punctuation included."
 
 ```
 omnivoice_mlx/
-├── backbone.py       # Qwen3 bidirectional trunk, cond / uncond / batch packed per row
+├── backbone.py       # Qwen3 bidirectional backbone
 ├── model.py          # 8 codebook embeddings + 8 heads
 ├── sampler.py        # the unmasking loop
-├── pipeline.py       # reference audio, prompt, decode, post-processing
-├── codec.py          # Higgs codec, decode branch loadable on its own
+├── pipeline.py       # the inference path
+├── codec.py          # Higgs codec
 ├── stream.py         # clause-ahead synthesis
-├── textnorm.py       # text normalisation, imported lazily
+├── textnorm.py       # text normalisation
 ├── kernels*.py       # custom Metal GEMM, off by default
-└── higgs/            # tokenizer, vendored from mlx-audio (MIT), bit-identical
+└── higgs/            # tokenizer, vendored from mlx-audio (MIT)
 scripts/convert.py    # writes MLX weight directories
-bench/                # parity_* (token-for-token vs official), bench* (timing, interleaved), benchlock.sh (lock + idle wait)
+bench/                # parity, timing, benchlock.sh
 docs/                 # the research log
 ```
 
 ## Licence
 
-| | |
+| what | licence |
 |---|---|
 | this repository's code | Apache-2.0, following upstream (`LICENSE`, `NOTICE`) |
 | `omnivoice_mlx/higgs/` | MIT, vendored from [mlx-audio](https://github.com/Blaizzy/mlx-audio) (`THIRD-PARTY-LICENSES.md`) |
 | pre-trained weights and derivatives (`convert.py` output, the HF checkpoint) | **CC-BY-NC**, non-commercial, attribution required |
-| Higgs codec weights | Boson Higgs Audio 2 Community License; shipped by neither this repo nor that checkpoint |
+| Higgs codec weights | Boson Higgs Audio 2 Community License |

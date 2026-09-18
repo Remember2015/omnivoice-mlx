@@ -77,25 +77,25 @@ export OMNIVOICE_REF_TEXT="它念的那句话，标点照写。"
 
 ```
 omnivoice_mlx/
-├── backbone.py       # Qwen3 双向 backbone，一行里按 Segment pack 了 cond / uncond / 多句
+├── backbone.py       # Qwen3 双向 backbone
 ├── model.py          # 8 个 codebook 的 embedding + 8 个 head
 ├── sampler.py        # unmask 循环
-├── pipeline.py       # 参考音、prompt、解码、后处理
-├── codec.py          # Higgs codec，decoder 分支可单独加载
+├── pipeline.py       # 推理流程
+├── codec.py          # Higgs codec
 ├── stream.py         # 分句预生成
-├── textnorm.py       # text normalization，惰性 import
+├── textnorm.py       # text normalization
 ├── kernels*.py       # 自定义 Metal GEMM，默认关
-└── higgs/            # tokenizer，vendor 自 mlx-audio（MIT），逐位一致
-scripts/convert.py    # 导出 MLX 权重目录
-bench/                # parity_*（对官方逐 token 对拍）、bench*（计时，同进程交错）、benchlock.sh（排他锁 + 等空载）
+└── higgs/            # tokenizer，vendor 自 mlx-audio（MIT）
+scripts/convert.py    # 导出 MLX 权重
+bench/                # 对拍、计时、benchlock.sh
 docs/                 # 研究记录
 ```
 
 ## 许可
 
-| | |
+| 内容 | 许可 |
 |---|---|
 | 本仓库代码 | Apache-2.0，同上游（`LICENSE`、`NOTICE`） |
 | `omnivoice_mlx/higgs/` | MIT，vendor 自 [mlx-audio](https://github.com/Blaizzy/mlx-audio)（`THIRD-PARTY-LICENSES.md`） |
 | 预训练权重及其衍生物（`convert.py` 的产物、HF 上那份） | **CC-BY-NC**，非商用、需署名 |
-| Higgs codec 权重 | Boson Higgs Audio 2 Community License，本仓库和 HF 那份都不带 |
+| Higgs codec 权重 | Boson Higgs Audio 2 Community License |

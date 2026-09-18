@@ -2,7 +2,7 @@
 
 装和用看 [../README.md](../README.md)。这里是过程：每一节写明怎么量的，赢的输的都留着。
 
-课题：[k2-fsa/OmniVoice](https://huggingface.co/k2-fsa/OmniVoice)（0.6B，Qwen3 双向主干 + Higgs-audio v2 codec，
+课题：[k2-fsa/OmniVoice](https://huggingface.co/k2-fsa/OmniVoice)（0.6B，Qwen3 双向 backbone + Higgs-audio v2 codec，
 masked-diffusion 式非自回归 TTS）在 Apple silicon 上走 MLX，量化，看 RTF 能到多少，再试 CuteTTS 那套
 调度/精度手法之外、NAR 特有的优化。日期 2026-09-09，机器 M2 Max 12 核 / 38 核 GPU / 32 GB，macOS 26.6，MLX 0.32.2。
 
@@ -19,93 +19,56 @@ masked-diffusion 式非自回归 TTS）在 Apple silicon 上走 MLX，量化，�
 | **本移植 8-bit+fp16，16 步 + 每 8 步刷新前缀 KV + uncond 每 3 步（推荐）** | **0.106** | ≈0.08 | **0.23–0.44 s** | CER 0.4 %，sim 0.747，**UTMOS 2.84** |
 | 同上不复用 uncond（第一版推荐） | 0.133 | 0.10 | 0.27–0.54 s | CER 0.7 %，sim 0.737，UTMOS 2.84 |
 | 同上，多句按长度分桶 B=4–8（吞吐） | **0.080**（20 句合并） | — | — | 同 |
-| 同上 8 步 + 每 4 步刷新（快档） | 0.075 | 0.057 | 0.16–0.32 s | CER 0.4 %，sim 0.738，UTMOS 2.69（−5 %） |
+| 同上 8 步 + 每 4 步刷新 | 0.075 | 0.057 | 0.16–0.32 s | CER 0.4 %，sim 0.738，UTMOS 2.69（−5 %） |
 | 同上 6 步 + 每 6 步刷新 | 0.06 | 0.044 | 0.13–0.22 s | UTMOS 2.53（fp16 上量） |
 
-假流式（按分句提前一句合成，第 10 节）：首音频 165 ms（快档）/ 286 ms（推荐档），之后零断流。
-去掉的：CFG 截断（相似度 −0.05～−0.08）、置信度阈值自适应步数（不触发反而慢）、4 步（声纹 −0.03、UTMOS −0.5、出整句错）、
-4-bit 全量化（声纹 −0.01～−0.02，60 句 1 句错字；内存档 345 MB 时可用）。
-
-## 布局
-
-```
-omnivoice_mlx/         自己写的移植，推理不依赖 torch / transformers（codec 借 mlx-audio 的 Higgs 实现）
-  backbone.py          Qwen3 双向 Transformer；一行里按 Segment 打包 cond / uncond / 多句，注意力按段算；可选前缀 KV 缓存
-  model.py             8 码本嵌入 + 8 个头（一次 matmul，只算目标位）；从原版 fp32 直接加载，可就地 cast / 量化
-  sampler.py           官方去掩码循环的逐行移植 + 三个旋钮（cfg_until / cache_refresh / conf_threshold）；多句同步
-  pipeline.py          参考音预处理、时长估计、prompt 拼装、codec 解码、官方后处理；generate / generate_batch
-  text.py audio.py duration.py codec.py stream.py kernels*.py
-  textnorm.py ttstext.py   文本规整（惰性 import，另需 markdown-it-py + wetext；默认关）
-scripts/convert.py     写 MLX 权重目录（bf16 / fp16 / 8-bit / 4-bit）
-bench/                 parity_ref.py（官方 torch 真值）、parity_mlx.py、bench.py、bench_batch.py、bench_mlxaudio.py、
-                       bench_ref_device.py（官方 torch 的 CPU / MPS × dtype 交错计时，第 19 节）、
-                       aggregate.py（出 markdown 表）、benchlock.sh、sweep_*.sh
-models/  out/          权重、输出（都不入库）。两份就够：k2-fsa-OmniVoice（原版 fp32，convert / parity 的源，也是各 mlx
-                       目录 audio_tokenizer 与 tokenizer 软链的目标，不能删）、mlx-q8-fp16（推荐档）。
-                       其它档用 scripts/convert.py 一分钟重出；
-                       bench.py --dtype 直接从原版转型加载，dtype 扫参不需要转换目录。
-assets/                空的。参考音自己准备，见下面「参考音」。
-```
-
-环境：运行时只要 `mlx numpy soundfile tokenizers safetensors`（`requirements.txt`）；基准和 mlx-audio 对比另装 `requirements-bench.txt`；
-官方参考 `.venv-ref`（`torch==2.8.0 torchaudio==2.8.0 omnivoice`）只用来产真值。权重 `huggingface-cli download k2-fsa/OmniVoice --local-dir models/k2-fsa-OmniVoice`。
-
-## 参考音
-
-**仓库里没有参考音**：一段录下来的嗓子属于说话的那个人。自己备一段干净的单声道录音，连同它念的原话一起指过来：
-
-```
-export OMNIVOICE_REF_WAV=assets/my-voice.wav
-export OMNIVOICE_REF_TEXT="它念的那句话，标点照写。"
-```
-
-本页所有数字都是拿一段 3.7 s（92 个音频 token）的真人中文录音量的。长一点也行，只是 prompt 变长，而 prompt 在每一
-去掩码步的关键路径上。转写必须是录音真说的那句：它是 prompt 的一部分，不是标签。换参考音之后，CER / 声纹相似度 /
-UTMOS 的绝对值都会变（速度不会），要跟本页比就整表重跑。
+假流式（按分句提前一句合成，第 10 节）：首音频 165 ms（8 步）/ 286 ms（16 步），之后零断流。
+去掉的：CFG 截断（相似度 −0.05～−0.08）、置信度阈值自适应步数（不触发反而慢）、4 步（speaker similarity −0.03、UTMOS −0.5、出整句错）、
+4-bit 全量化（speaker similarity −0.01～−0.02，60 句 1 句错字；要省内存时 345 MB 可用）。
 
 ## 方法
 
 - **正确性**。`bench/parity_ref.py` 用官方实现（CPU fp32）对同一参考音、同 3 句、8 步、位置/类别温度都为 0（确定性）
   存下参考 token、prompt ids、目标长度、生成 token；`bench/parity_mlx.py` 用同样的输入跑本移植比对。
 - **计时**。`bench/bench.py` 一个进程里加载一次模型，所有采样变体按句轮转交错，3 轮取中位数；先各变体预热一次。
-  RTF = (去掩码 + codec 解码) / 生成的原始时长（T × 40 ms），不含后处理（后处理会剪掉静音，改变时长）。
+  RTF = (unmask + codec 解码) / 生成的原始时长（T × 40 ms），不含后处理（后处理会剪掉静音，改变时长）。
   所有作业走 `bench/benchlock.sh`（排他锁 + 等空载）。绝对数在这台机器上随负载漂 10–40 %，只比同进程交错的数。
 - **质量**。20 句中文集（`bench/cases.py` 的 `ASR_SET`）各合成一次，Fun-ASR-Nano（sherpa-onnx int8）回读算 CER，
   CAM++（3D-Speaker `speech_campplus_sv_zh-cn_16k-common`）算对参考音的余弦相似度，UTMOS22-strong
   （`k2-fsa/TTS_eval_models`，论文用的 MOS 预测器）算自然度。这三个模型和跑它们的脚本都不在本仓库——它们跟
-  OmniVoice 无关，换成任何一套回读 / 声纹 / MOS 都行，只是绝对值不能跨套比。`bench/bench.py` 会把 wav 写进
+  OmniVoice 无关，换成任何一套 ASR / speaker / MOS 都行，只是绝对值不能跨套比。`bench/bench.py` 会把 wav 写进
   `out/<tag>/`，拿去喂你自己的那套；`bench/aggregate.py --quality` 能读回一份 `quality.json` 出表。参考音是一段 3.7 s
   的真人中文录音（92 token）。2026-09-16 换过一次：那段素材底下一直铺着背景音乐，用 Demucs 减掉了（同一段、
-  同采样点、同长度，只是不带乐了）。本页在那之前测的 CER / 声纹相似度 / UTMOS 是旧参考音上的数，两者不能混着比。
+  同采样点、同长度，只是不带乐了）。本页在那之前测的 CER / speaker similarity / UTMOS 是旧参考音上的数，两者不能混着比。
 
 ## 结果
 
 ### 0. 移植正确性
 
-`parity_ref.py`（官方 torch CPU fp32）vs `parity_mlx.py`：参考音预处理后同为 92 token（4 个码本各差 1 个 token，RVQ 残差路径的浮点差）；
+`parity_ref.py`（官方 torch CPU fp32）vs `parity_mlx.py`：参考音预处理后同为 92 token（4 个 codebook 各差 1 个 token，RVQ 残差路径的浮点差）；
 用官方参考 token 后 prompt ids 完全一致、目标长度一致；fp32 下 8 步确定性生成 3 句逐 token 100 % 一致，解码 + 后处理后
-波形时长、RMS 与官方相同。bf16 / fp16 确定性生成只有 15–25 % token 一致——迭代去掩码是混沌过程，一处 argmax 翻转就级联，
+波形时长、RMS 与官方相同。bf16 / fp16 确定性生成只有 15–25 % token 一致——迭代 unmask 是混沌过程，一处 argmax 翻转就级联，
 所以精度的影响只能看下面的 CER / 相似度，不能看 token 一致率。
 
 ### 1. 精度 / 量化：只有 fp16 更快，量化不提速
 
 3 句（7 / 17 / 34 字，T = 39 / 63 / 126 token）× 3 轮中位数，单句，同进程交错各变体，模型间背靠背。ms/step 是一次
-去掩码步（cond + uncond 合在一行里的一次前向 + 采样），tok/step 是那一行的长度（198 / 254 / 391）。
+unmask 步（cond + uncond 合在一行里的一次前向 + 采样），tok/step 是那一行的长度（198 / 254 / 391）。
 
 | 模型 | 常驻 | 32 步 ms/step（短/中/长） | RTF 32 步 | RTF 16 步 | RTF 8 步 |
 |---|---:|---|---:|---:|---:|
 | bf16（头 fp32） | 1.99 GB | 35.8 / 38.3 / 56.9 | 0.469 | 0.238 | 0.123 |
 | **fp16**（头 fp32） | 1.99 GB | **31.6 / 33.9 / 48.7** | **0.409** | **0.208** | **0.108** |
 | fp32 | 3.19 GB | 36.1 / 38.6 / 58.9 | 0.481 | 0.244 | 0.124 |
-| 8-bit g64（主干 Linear） | 1.56 GB | 37.1 / 42.3 / 64.4 | 0.514 | 0.261 | 0.134 |
-| 4-bit g64（主干 Linear） | 1.36 GB | 37.8 / 42.9 / 65.0 | 0.520 | 0.264 | 0.135 |
+| 8-bit g64（backbone Linear） | 1.56 GB | 37.1 / 42.3 / 64.4 | 0.514 | 0.261 | 0.134 |
+| 4-bit g64（backbone Linear） | 1.36 GB | 37.8 / 42.9 / 65.0 | 0.520 | 0.264 | 0.135 |
 
 RTF 是三句合并（总耗时 / 总时长）。常驻 = 预热后 `mx.get_active_memory()`，含 codec（fp32，~0.8 GB）。
 
 - **bf16 和 fp32 一样慢**：M2 的 GPU 没有原生 bf16，MLX 用转换模拟；fp16 比 bf16 快 12–15 %。
 - **量化更慢**：这里每步是 M ≈ 200–400 行的 GEMM，是算力 / 发射瓶颈而不是带宽瓶颈，`quantized_matmul` 在这个 M 下比
   fp16 GEMM 慢 15–30 %。量化的价值只在内存（1.99 → 1.36 GB）和包体（1242 → 609 MB）。
-  和 CuteTTS（自回归、M = 1–2，8-bit 主干 −23 %）正好相反。
+  和 CuteTTS（自回归、M = 1–2，8-bit backbone −23 %）正好相反。
 - 每步有约 15 ms 固定开销（198 → 254 token 只多 7 %，254 → 391 多 44 %）：28 层 × ~26 个 kernel 的发射 / 调度，
   短句上占一步的一半。这部分不随 token 数和步数以外的任何东西变。
 
@@ -135,15 +98,15 @@ CER 的非零项全是 ASR 侧的规整：「二十六度」→「26度」（15 
 | 本移植 bf16：35.8 / 38.3 / 56.9 | 0.469 | 0.238 | 0.123 |
 | 本移植 fp16：31.6 / 33.9 / 48.7 | 0.409 | 0.208 | 0.108 |
 
-差在哪（都是「少做事」，不是算子）：mlx-audio 每步跑两次前向（cond、uncond 各一次 batch-1），8 个头对整行
-（prompt + 目标）算 logits 再切目标位，每步 `mx.eval` 一次同步再用 `concatenate` 重建 prompt+目标的 ids 和嵌入，
-argsort 两次求 rank。本移植：cond + uncond 拼成一行一次前向（注意力按段算，不多算 cross 项），prompt 的嵌入只算一次，
+差在哪（都是「少做事」，不是算子）：mlx-audio 每步跑两次前向（cond、uncond 各一次 batch-1），8 个 head 对整行
+（prompt + 目标）算 logits 再切目标位，每步 `mx.eval` 一次同步再用 `concatenate` 重建 prompt+目标的 ids 和 embedding，
+argsort 两次求 rank。本移植：cond + uncond 拼成一行一次前向（注意力按段算，不多算 cross 项），prompt 的 embedding 只算一次，
 头只算目标位，reveal 用 `argpartition`，整步图 `mx.async_eval` 交给 GPU、主线程接着搭下一步。
 
-### 3. 多句打包（吞吐模式）：B=8 再省 18–24 %
+### 3. 多句 batch（吞吐模式）：B=8 再省 18–24 %
 
 `bench/bench_batch.py`，fp16，20 句集（每句 16–26 字，共 62 s 音频）按 B 句一组走 `generate_batch`——B 句的 cond / uncond
-段拼成一行，每步一次前向，注意力按段算（不做 padding，也没有 cross 项）。合并 RTF = 总(去掩码 + 解码) / 总时长：
+段拼成一行，每步一次前向，注意力按段算（不做 padding，也没有 cross 项）。合并 RTF = 总(unmask + 解码) / 总时长：
 
 | 步数 | B=1 | B=2 | B=4 | B=8 | 首批延迟 B=8 |
 |---|---:|---:|---:|---:|---:|
@@ -151,10 +114,10 @@ argsort 两次求 rank。本移植：cond + uncond 拼成一行一次前向（�
 | 16 | 0.259 | 0.223 | 0.219 | 0.198 | 5.2 s |
 | 8 | 0.172 | 0.143 | 0.136 | 0.133 | 3.4 s |
 
-单句时 GPU 已经基本吃满（M ≈ 290 行的 GEMM），打包只是摊掉每步的固定开销，B=2 拿走大半收益。这是段落 / 离线合成的
+单句时 GPU 已经基本吃满（M ≈ 290 行的 GEMM），batch 只是摊掉每步的固定开销，B=2 拿走大半收益。这是段落 / 离线合成的
 选项，交互式没用（首批延迟按 B 倍增）。峰值内存不变（3.66 GB，由加载瞬态决定）。
 
-### 4. NAR 特有的三种省算量法：前缀 KV 缓存有效，CFG 截断掉声纹，置信度阈值无效
+### 4. NAR 特有的三种省算量法：前缀 KV cache 有效，CFG 截断掉 speaker similarity，置信度阈值无效
 
 fp16 单句，16 个采样变体同进程交错（`bench/sweep_variants.sh`），3 句 × 3 轮中位数，20 句 × 1 轮质量。
 变体名：`s<步数>[-kv<n>][-cfg<比例>][-th<概率>]`。
@@ -178,7 +141,7 @@ fp16 单句，16 个采样变体同进程交错（`bench/sweep_variants.sh`）�
 | s16-th0.95 | 34.8 / 39.2 / 54.2 | 198 / 254 / 391 | 0.235 | 0.75 % | 0.746 / 0.663 |
 | s16-kv4-th0.9 | — | — | — | 0.00 % | 0.744 / 0.614 |
 
-- **前缀 KV 缓存**（`cache_refresh=n`，Fast-dLLM 的思路搬到 TTS）：prompt（风格 + 文本 + 参考音 token，这里 120–140 个）
+- **前缀 KV cache**（`cache_refresh=n`，Fast-dLLM 的思路搬到 TTS）：prompt（风格 + 文本 + 参考音 token，这里 120–140 个）
   的 K/V 每 n 步算一次，中间的步只把目标 token 送进 Transformer，attention 时拼上缓存的 K/V。双向注意力下 prompt 的
   隐状态其实依赖目标 token，所以这是近似——但 20 句上 CER、相似度都在噪声内（相似度 −0.01～−0.02，与 dtype 间的差一个量级）。
   行长从 198 / 254 / 391 降到 93 / 142 / 269，每步 −36 / −37 / −30 %；短句上剩下的主要是那 ~15 ms 固定开销。
@@ -190,7 +153,7 @@ fp16 单句，16 个采样变体同进程交错（`bench/sweep_variants.sh`）�
 ### 5. 量化再看：激活换成 fp16 后，8-bit / 4-bit 比 fp16 还快 3–12 %
 
 第 1 节的 8-bit / 4-bit 目录是 `convert.py` 默认的 bf16 激活。把激活换成 fp16 重转（`--dtype float16 --bits 8`；
-`--bits 4 --quantize-embed --quantize-heads` 连 151k 词表嵌入和 8 个头一起 4-bit），四种口味装进同一个进程按句交错
+`--bits 4 --quantize-embed --quantize-heads` 连 151k 词表 embedding 和 8 个 head 一起 4-bit），四种口味装进同一个进程按句交错
 （`bench/bench_models.py`，codec 共享），3 轮中位数：
 
 | 口味 | 权重 | 32 步 ms/step（短/中/长） | RTF 32 步 | RTF 8 步 |
@@ -205,7 +168,7 @@ fp16 GEMM 略快（权重读得少），M ≈ 400 时持平。8-bit + fp16 是�
 常驻 1.11 GB，20 句上 CER 一样（0.23–0.98 %，仍是 ASR 数字规整），相似度 0.717–0.725 比 fp16 的 0.744–0.757 低约 0.03
 （第 7 节用 3 轮种子再确认）。8-bit + fp16 的相似度 0.735–0.767 与 fp16 同。
 
-补充扫描（`sweep_variants.sh`，同方法，另一进程）：把 prompt 只算一次（kv16 于 16 步 / kv8 于 8 步）和 32 步上的 KV 缓存：
+补充扫描（`sweep_variants.sh`，同方法，另一进程）：把 prompt 只算一次（kv16 于 16 步 / kv8 于 8 步）和 32 步上的 KV cache：
 
 | 变体 | RTF 合并 | 20 句 CER | 相似度 均值 / 最低 |
 |---|---:|---:|---|
@@ -220,8 +183,8 @@ fp16 GEMM 略快（权重读得少），M ≈ 400 时持平。8-bit + fp16 是�
 | s8-kv8-cfg0.5 | 0.065 | 0.56 % | **0.661** / 0.527 |
 | s8-cfg0.75 | 0.102 | 1.23 % | 0.697 / 0.565 |
 
-KV 缓存把相似度从 0.746 拉到 0.726–0.734（−0.01～−0.02，最低值 0.65 → 0.57–0.60），CER 不变；CFG 截断则掉到
-0.66–0.70 且开始出错字（s8-kv4-cfg0.5 有一句 CER 43 %）。取 KV 缓存，弃 CFG 截断。第 7 节用 3 轮种子确认 KV 缓存那 0.02 是不是真的。
+KV cache 把相似度从 0.746 拉到 0.726–0.734（−0.01～−0.02，最低值 0.65 → 0.57–0.60），CER 不变；CFG 截断则掉到
+0.66–0.70 且开始出错字（s8-kv4-cfg0.5 有一句 CER 43 %）。取 KV cache，弃 CFG 截断。第 7 节用 3 轮种子确认 KV cache 那 0.02 是不是真的。
 
 ### 7. 三轮种子确认（20 句 × 3 轮，n = 60）：16 步 + 每 8 步刷新 KV 不掉质量
 
@@ -240,10 +203,10 @@ fp16 与 4-bit 全量化，每个变体 3 轮不同随机种子（`bench.py --ru
 
 读法：fp16 上 s32 / s16 / s8 自己的相似度在 0.734–0.740 之间，这就是噪声底（±0.005）。s16-kv8（0.741）和 s8-kv4（0.732）
 在噪声内；把 prompt 只算一次（kv16 / s8-kv8）稳定低 0.015，是真的但很小。4-bit 全量化整体再低 0.01–0.02，
-且 60 句里出了 1 句错字率 43 %：4-bit 是内存换质量的档，不是免费的；8-bit + fp16 激活（第 5 节）没有这个代价。
+且 60 句里出了 1 句错字率 43 %：4-bit 是拿质量换内存，不是免费的；8-bit + fp16 激活（第 5 节）没有这个代价。
 CER 的非零项与前面一样是 ASR 的数字规整（15 % 那句永远是「二十六度」）。
 
-推荐档 8-bit g64 + fp16 激活（`models/mlx-q8-fp16`）同样 3 轮确认，3 句计时 + 20 句 × 3 轮质量：
+8-bit g64 + fp16 激活这一组（`models/mlx-q8-fp16`）同样 3 轮确认，3 句计时 + 20 句 × 3 轮质量：
 
 | 变体 | 每步 ms（短/中/长） | RTF 3 句合并 | RTF 20 句合并 | CER | 相似度 均值 / 最低 |
 |---|---|---:|---:|---:|---|
@@ -257,11 +220,11 @@ CER 的非零项与前面一样是 ASR 的数字规整（15 % 那句永远是「
 
 **推荐配置（第 12 节后再修订）**：8-bit g64 权重 + fp16 激活、头 fp32（`models/mlx-q8-fp16`，829 MB，常驻 1.58 GB）；
 默认 `SamplerConfig(num_steps=16, cache_refresh=8, uncond_every=3)` → RTF 0.106（7 字句 230 ms、34 字句 440 ms 整句出声），
-CER / 声纹 / UTMOS 都与官方 32 步同；快档 `num_steps=8, cache_refresh=4` → RTF 0.075（160 / 320 ms），UTMOS −5 %。
+CER / speaker similarity / UTMOS 都与官方 32 步同；`num_steps=8, cache_refresh=4` → RTF 0.075（160 / 320 ms），UTMOS −5 %。
 
 ### 8. 步数下限：6 步还行，4 步开始掉
 
-fp16，`s4 / s6 / s8` 各配 KV 缓存，3 句 × 3 轮计时，20 句 × 3 轮质量（n = 60）：
+fp16，`s4 / s6 / s8` 各配 KV cache，3 句 × 3 轮计时，20 句 × 3 轮质量（n = 60）：
 
 | 变体 | RTF（3 句合并） | CER | 相似度 均值 / 最低 |
 |---|---:|---:|---|
@@ -274,26 +237,26 @@ fp16，`s4 / s6 / s8` 各配 KV 缓存，3 句 × 3 轮计时，20 句 × 3 轮�
 | s4-kv2 | 0.049 | 1.06 %（1 句 30 %） | **0.691** / 0.569 |
 | s4-kv4 | 0.044 | 2.05 %（1 句 40 %） | **0.699** / 0.535 |
 
-6 步（含 KV 缓存）仍在 8 步的噪声内；4 步相似度掉 0.03–0.04 且开始整句出错。论文的步数消融（英文 WER 8 步翻倍）
+6 步（含 KV cache）仍在 8 步的噪声内；4 步相似度掉 0.03–0.04 且开始整句出错。论文的步数消融（英文 WER 8 步翻倍）
 在这批中文短句上没有出现，8 → 6 才是这台机器上速度 / 质量的膝点。单句 RTF 的下限约 0.06（s6-kv6），质量不掉；
 再往下只能靠掉质量换。
 
-### 9. 长文本（官方分块路径）：46 s 段落 RTF 0.057，分块并行只再省 6–8 %
+### 9. 长文本（官方 chunk 路径）：46 s 段落 RTF 0.057，chunk 并行只再省 6–8 %
 
 `generate_long` 复刻官方：估计时长 > 30 s 就按标点切成 ~15 s 的块（`chunk_text_punctuation`），每块对同一参考音生成，
 0.1 s 淡出 / 静音 / 淡入拼接，最后整段做一次后处理。官方对单条请求的块是顺序生成的；这里多了把所有块打进一个
-去掩码循环的选项（`batch_chunks`）。304 字会议通知，估 46 s → 4 块（92 / 91 / 96 / 25 字），`models/mlx-q8-fp16`，
+unmask 循环的选项（`batch_chunks`）。304 字会议通知，估 46 s → 4 块（92 / 91 / 96 / 25 字），`models/mlx-q8-fp16`，
 2 轮中位数（机器空载；先前一轮被浏览器的 GPU 占用干扰，数字 2 倍，作废）：
 
-| 变体 | 顺序 RTF | 打包 RTF | 打包墙钟 |
+| 变体 | 顺序 RTF | batch RTF | batch 墙钟 |
 |---|---:|---:|---:|
 | s32 | 0.245 | 0.231 | 10.7 s |
 | s16-kv8 | 0.104 | 0.097 | 4.5 s |
 | **s8-kv4** | **0.057** | **0.053** | 2.5 s |
 | s6-kv6 | 0.044 | 0.040 | 1.9 s |
 
-长块（T ≈ 350）的 RTF 比短句低：每步固定开销被摊薄，主干本身对行长是线性的（实测 200 → 1600 token 每 token 116–143 µs）。
-分块打包只再省 6–8 %：每步已经 700+ token，GPU 早就吃满。一段 46 s 的文字 2.5 s 出整段。
+长块（T ≈ 350）的 RTF 比短句低：每步固定开销被摊薄，backbone 本身对行长是线性的（实测 200 → 1600 token 每 token 116–143 µs）。
+chunk batch 只再省 6–8 %：每步已经 700+ token，GPU 早就吃满。一段 46 s 的文字 2.5 s 出整段。
 
 ### 10. 假流式：按分句提前一句合成，首音频 165 ms，之后不断流
 
@@ -311,9 +274,9 @@ fp16，`s4 / s6 / s8` 各配 KV 缓存，3 句 × 3 轮计时，20 句 × 3 轮�
 分句边界的韵律是接的不是连的（听 `out/stream/stream-s8-kv4.wav`），每句自带的静音修剪 / 淡入淡出让总时长比整段合成
 多 10 %。对接 LLM 流式文本正合适：LLM 吐出第一个分句 → 165 ms 后出声。做不到的只有首句那 0.17–0.3 s。
 
-### 11. UTMOS 自然度：16 步 = 32 步，8 步掉 0.13，KV 缓存不掉
+### 11. UTMOS 自然度：16 步 = 32 步，8 步掉 0.13，KV cache 不掉
 
-CER 和声纹都没分出 8 步和 32 步，但那两个指标只看「念对没有」「像不像」，不看「自然不自然」。补 UTMOS22-strong
+CER 和 speaker similarity 都没分出 8 步和 32 步，但那两个指标只看「念对没有」「像不像」，不看「自然不自然」。补 UTMOS22-strong
 （论文用的 MOS 预测器，`k2-fsa/TTS_eval_models`），同一批 20 句 × 3 轮 wav：
 
 | 变体（q8+fp16） | UTMOS 均值 | 最低 | | 变体（fp16） | UTMOS 均值 | 最低 |
@@ -327,18 +290,18 @@ CER 和声纹都没分出 8 步和 32 步，但那两个指标只看「念对没
 （官方 torch 参考 3 句 8 步 2.67，本移植 fp32 同句 2.60，3 句噪声大。绝对值 2.8 偏低是这批指令式短句 + 3.7 s 参考音的风格，
 看相对差。）
 
-- 32 → 16 步：没变（2.826 → 2.838）；16 步上加 KV 缓存：没变（2.835）。
-- 16 → 8 步：−0.13（约 5 %），每轮种子都一致；8 → 6 → 4 步再各掉 0.1、0.26。这是 CER / 声纹没看见的那部分。
-- KV 缓存在 8 步以下开始有代价（s6 → s6-kv6 −0.06），16 步上没有。
+- 32 → 16 步：没变（2.826 → 2.838）；16 步上加 KV cache：没变（2.835）。
+- 16 → 8 步：−0.13（约 5 %），每轮种子都一致；8 → 6 → 4 步再各掉 0.1、0.26。这是 CER / speaker similarity 没看见的那部分。
+- KV cache 在 8 步以下开始有代价（s6 → s6-kv6 −0.06），16 步上没有。
 
 **所以把推荐改成：默认 `num_steps=16, cache_refresh=8`（RTF 0.133，首句 290 ms，三个指标都与 32 步同）；
-`num_steps=8, cache_refresh=4` 是快档（RTF 0.075，首句 165 ms，自然度 −5 %），要不要用听 out/listen/ 里的对照。**
+`num_steps=8, cache_refresh=4` 更快（RTF 0.075，首句 165 ms，自然度 −5 %），要不要用听 out/listen/ 里的对照。**
 
 ### 12. 第二轮：算子层到底了，剩下的在算法层
 
 用户追问「推理算法和算子层面还有没有机会」。先量再动。
 
-**一步的时间在哪**（`bench/profile_step.py`，q8+fp16，推荐档的缓存步 = 2T 行）：
+**一步的时间在哪**（`bench/profile_step.py`，q8+fp16，默认那组的缓存步 = 2T 行）：
 
 | T | 行 | 缓存步 GPU | 其中 28 层注意力 | 28 层 MLP | 头 + CFG + 采样 | 主线程搭图 |
 |---:|---:|---:|---:|---:|---:|---:|
@@ -359,10 +322,10 @@ fp32 对拍：与官方仍逐 token 一致，快慢路径同种子 100 % / 100 %
 沿 N 拼 GEMM 不缩短 K 循环延迟，少掉的小 kernel 每层 ~0.04 ms 淹没在噪声里。
 
 **算子层剩下的唯一办法**是自定义 Metal 的 split-K 量化 GEMM（把 K 循环切成几段并行再归约），估计短句每步 −30 %，
-长句 −10 %，工作量是天级的，没做。`mx.compile` 只融合逐元素链，对这个结构 ≤ 5 %，且按段切片的整数会烤进图里，也没做。
+长句 −10 %，工作量是天级的，没做。`mx.compile` 只融合 elementwise 链，对这个结构 ≤ 5 %，且按段切片的整数会烤进图里，也没做。
 
 **算法层第二轮**：uncond 分支隔步复用（stale CFG，`uncond_every=n`：缓存步里只每 n 步重算无条件分支，中间步复用上次的
-无条件 log-prob 做引导）和 10 / 12 步档。q8+fp16，3 句 × 3 轮计时，20 句 × 3 轮三指标：
+无条件 log-prob 做引导）和 10 / 12 步。q8+fp16，3 句 × 3 轮计时，20 句 × 3 轮三指标：
 
 | 变体 | RTF 3 句 | RTF 20 句 | CER | 相似度 均值 / 最低 | UTMOS |
 |---|---:|---:|---:|---|---:|
@@ -376,7 +339,7 @@ fp32 对拍：与官方仍逐 token 一致，快慢路径同种子 100 % / 100 %
 
 无条件分支每 3 步算一次：RTF −20 %，三个指标都与基线同（每步行长 142 → 110，16 步里 7 步有新鲜的 uncond）。
 ue2 的 UTMOS 低 0.06，在种子噪声边上（同配置两次跑差 0.01–0.03），ue3 干净。12 步以下 UTMOS 掉 3 %，和第 11 节一致。
-和第 4 节的 CFG 截断（后半步完全不算 uncond，声纹 −0.05）对比：引导方向留着、只是更新得慢，就不掉。
+和第 4 节的 CFG 截断（后半步完全不算 uncond，speaker similarity −0.05）对比：引导方向留着、只是更新得慢，就不掉。
 **新默认：`SamplerConfig(num_steps=16, cache_refresh=8, uncond_every=3)`，RTF 0.106。**
 
 
@@ -403,14 +366,14 @@ ue2 的 UTMOS 低 0.06，在种子噪声边上（同配置两次跑差 0.01–0.
 
 数值正确（相对误差 5e-4，fp16 舍入水平），速度 慢 1.3–5 倍：2–3 TFLOPS。原因：标量 / half4 FMA 每 4 个乘加配一次
 threadgroup 内存读 + 类型转换，指令里一半不是 FMA；M > 78 时 64 个累加器把寄存器压爆。MLX 的 steel qmm 用
-simdgroup 8×8 矩阵指令，我这种结构追不上。下一代要用 `simdgroup_half8x8` + 8 行粒度的 M 分块 + 8 个 simdgroup 共享一份
-x 分块（交给了子代理，结果见 `omnivoice_mlx/kernels_sg.py` 的 docstring）。`kernels.py` 留作否定结果，模型不用它。
+simdgroup 8×8 矩阵指令，我这种结构追不上。下一代要用 `simdgroup_half8x8` + 8 行粒度的 M tile + 8 个 simdgroup 共享一份
+x tile（交给了子代理，结果见 `omnivoice_mlx/kernels_sg.py` 的 docstring）。`kernels.py` 留作否定结果，模型不用它。
 
 顺带量到：fp16 GEMM 在 K=2048/3072 → N=1024 的形状上和 8-bit 一样快甚至更快，但 N=4096/6144 上慢 15–25 %，整体仍是 8-bit 赢。
 
 **第二代（simdgroup 矩阵指令，opus 子代理做的，`omnivoice_mlx/kernels_sg.py` + `bench/test_kernel_sg.py`）**：每个 threadgroup
 负责 BM×BN 输出块、走完整 K，x 和反量化后的权重块进 threadgroup 内存，`simdgroup_half8x8` 乘加、fp32 累加；
-M 按 8 行分块（MLX 的 steel qmm 补到 32），tile 形状 (TM, TN, WM, WN, BK) 在 440 种组合里扫出每个 (M, N) 区间的赢家。
+M 按 8 行 tile（MLX 的 steel qmm 补到 32），tile 形状 (TM, TN, WM, WN, BK) 在 440 种组合里扫出每个 (M, N) 区间的赢家。
 六个变体里最大的单项收益是放弃 `simdgroup_load`、手写 half2 片段加载（快 1.4×——从 threadgroup 内存 simdgroup_load
 一次的代价约等于一次 mma）；双缓冲反而更慢（threadgroup 内存翻倍、驻留线程组减半）。正确性：72 个形状全部 ≤ 1.23e-3，
 多数与 MLX 逐位相同。依赖链基准（我自己重跑的一份，µs / GEMM）：
@@ -423,17 +386,17 @@ M 按 8 行分块（MLX 的 steel qmm 补到 32），tile 形状 (TM, TN, WM, WN
 | (3072, 1024) | 0.91× | 0.89× | 0.86× | 0.89× |
 
 **局部赢**：只在 M ≤ 80 且 N ≥ 4096（qkv、gate/up 两个投影）快 1.05–1.3×，其余慢 10–15 %。子代理把限制也量清了：
-MLX 唯一的结构性浪费是把 M 补到 32（M=32 → 33 时耗时 56 → 90 µs），8 行分块拿到的就是这一块；它的 mma 发射率已到
+MLX 唯一的结构性浪费是把 M 补到 32（M=32 → 33 时耗时 56 → 90 µs），8 行 tile 拿到的就是这一块；它的 mma 发射率已到
 机器峰值的 55–75 %；反量化 + 搬运阶段和 mma 不重叠（M=252 时 276 + 142 ≈ 394 µs），tile 做厚就掉占用率；
 N=1024 的形状只有 N/BN 个 threadgroup，并行度不够，split-K 又要多一次发射（10–14 µs）吃掉差价。
 
-接进模型：`SmallMQuantizedLinear`（`load_model(custom_gemm=True)`），行数 ≤ 80 且 N ≥ 4096 时走自定义内核，其余走 MLX。
+接进模型：`SmallMQuantizedLinear`（`load_model(custom_gemm=True)`），行数 ≤ 80 且 N ≥ 4096 时走自定义 kernel，其余走 MLX。
 端到端（`bench/test_sg_e2e.py`，两份模型同进程交错，默认采样器）：
 
 | | 7 字 | 17 字 | 34 字 | 3 句合并 | 20 句合并 |
 |---|---:|---:|---:|---:|---:|
 | MLX qmm | 221 ms | 250 | 416 | 0.106 | 0.1073 |
-| 自定义内核分派 | **208** | 254 | 416 | 0.105 | 0.1071 |
+| 自定义 kernel 分派 | **208** | 254 | 416 | 0.105 | 0.1071 |
 
 只有 7 字句快 6 %（它的缓存步是 39 / 78 行），17 字以上一行都碰不到赢的区间；确定性对拍 7 / 34 字 100 %、17 字 94 %
 （fp16 舍入顺序不同，迭代里级联）。结论：接上了，留作可选（`custom_gemm=True`），默认关。两代自定义算子加起来
@@ -443,7 +406,7 @@ N=1024 的形状只有 N/BN 个 threadgroup，并行度不够，split-K 又要�
 
 用户问「看看他们的 GPU 利用率」。无 sudo 能读的是加速器自己的计数器（`ioreg -c IOAccelerator` 的
 "Device Utilization %"，`bench/gpu_util.py` 每 0.1 s 采一次），它说的是 GPU 有没有活；活干得好不好用
-「主干 GEMM 的 FLOPs / 整步时间」折算成 TFLOPS 看（M2 Max 峰值 13.6）。3 句循环跑 8 s：
+「backbone GEMM 的 FLOPs / 整步时间」折算成 TFLOPS 看（M2 Max 峰值 13.6）。3 句循环跑 8 s：
 
 | | GPU 忙闲（均值 / 中位） | 折算 GEMM 速率 |
 |---|---|---|
@@ -474,28 +437,28 @@ N=1024 的形状只有 N/BN 个 threadgroup，并行度不够，split-K 又要�
 - 头 GEMM 改 fp16：~1 %，精度改动 → 第 16 节量了，弃。
 - `mx.compile` 融合 silu×up / 残差：~3 % 估计 → 第 16 节做了，噪声内。
 - simdgroup 版小 M 量化 GEMM（第 13 节的下一代）：GEMM 部分 ≤ 1.5×，整步 ≤ 15 %。
-- 更多行进同一个 kernel：只有多句打包（第 16 节，−25 %），单句延迟无解。
+- 更多行进同一个 kernel：只有多句 batch（第 16 节，−25 %），单句延迟无解。
 
-### 16. 便宜活做完；多句打包：修掉 MLX 缓存坑后 B=4–8 拿 −25 %
+### 16. 便宜活做完；多句 batch：修掉 MLX 缓存坑后 B=4–8 拿 −25 %
 
 用户要求「便宜的再做做」，三件都做了、量了：
 
 | 项 | 做法 | 结果 |
 |---|---|---|
-| 头 GEMM fp16 | `--head-dtype float16`（量化目录加载时转） | RTF 0.108 vs 0.109（无差）；UTMOS 2.794 vs 2.835、声纹 0.741 vs 0.747、CER 0.65 vs 0.40 %。**弃**，头留 fp32 |
+| 头 GEMM fp16 | `--head-dtype float16`（量化目录加载时转） | RTF 0.108 vs 0.109（无差）；UTMOS 2.794 vs 2.835、speaker similarity 0.741 vs 0.747、CER 0.65 vs 0.40 %。**弃**，头留 fp32 |
 | `mx.compile(shapeless)` | silu×up、CFG 混合、Gumbel 链各编译成一个 kernel（split 要留在编译函数外，shapeless 推不出它的形状） | 精确不变；单步时间噪声内。留着，不算收益 |
 | CFG 三次 log_softmax 合一次 | 代数恒等 | 第 15 节，~1 % |
 
-多句打包重做：缓存步不再走分段路径，而是把所有句子的 cond / uncond 行补零到同长堆成一个 batch，前缀 K/V 在刷新步
+多句 batch 重做：缓存步不再走分段路径，而是把所有句子的 cond / uncond 行补零到同长堆成一个 batch，前缀 K/V 在刷新步
 补齐堆叠一次，之后每层一次带 mask 的 SDPA（kernel 数不随句数涨）；`generate_batch` 先按估计长度排序再分桶。
-fp32 下 5 句打包 vs 逐句、快路径 vs 分段路径逐 token 100 % 一致。
+fp32 下 5 句 batch vs 逐句、快路径 vs 分段路径逐 token 100 % 一致。
 
-第一版打包测出来「越打包越慢」（B=1 0.107 → B=8 0.157，GPU 忙闲 97 % → 65 %），主机搭图只 11–74 ms，不是它。
+第一版 batch 测出来「越 batch 越慢」（B=1 0.107 → B=8 0.157，GPU 忙闲 97 % → 65 %），主机搭图只 11–74 ms，不是它。
 追下去是 MLX 的缓冲区缓存：默认无上限，一次大 batch 之后缓存里留着几 GB 奇形尺寸的空闲 buffer，之后的每次分配
 都走慢路径，GPU 空等——连之后的 B=1 都从 0.107 变 0.162，`mx.clear_cache()` 立刻恢复。`mx.set_cache_limit(512 MB)` 后
 （已写进 `OmniVoiceTTS.__init__`）：
 
-| B（20 句集，2 轮取最好） | 补零打包（快路径） | 分段路径 | 每步行数 | 折算 GEMM |
+| B（20 句集，2 轮取最好） | 补零 batch（快路径） | 分段路径 | 每步行数 | 折算 GEMM |
 |---:|---:|---:|---:|---:|
 | 1 | 0.106 | 0.107 | 128 | 5.9 TFLOPS |
 | 2 | 0.093 | 0.093 | 258 | 6.9 |
@@ -503,9 +466,9 @@ fp32 下 5 句打包 vs 逐句、快路径 vs 分段路径逐 token 100 % 一致
 | 8 | 0.085 | **0.081** | 911 | 8.0 |
 | 16 | 0.087 | **0.080** | 1429 | 8.0 |
 
-GPU 忙闲全程 96–97 %。打包能拿 −20～25 %（0.106 → 0.080），B≥4 就到平台；折算 GEMM 从 5.9 到 8 TFLOPS，
+GPU 忙闲全程 96–97 %。batch 能拿 −20～25 %（0.106 → 0.080），B≥4 就到平台；折算 GEMM 从 5.9 到 8 TFLOPS，
 再上去被非 GEMM 的 30 % 卡住。分段路径在 B≥4 时反而比补零快 5 %（补零浪费 > 少掉的 kernel），所以采样器
-只在 ≤2 句或等长时走补零 batch，其余走分段。第 3 节早先 fp16 那组打包数（B=8 只 −18 %）是在无上限缓存下量的，偏保守。
+只在 ≤2 句或等长时走补零 batch，其余走分段。第 3 节早先 fp16 那组 batch 数（B=8 只 −18 %）是在无上限缓存下量的，偏保守。
 **多句场景的建议：按长度分桶、B=4–8，RTF ≈ 0.08；再大没用。**
 
 内存随 B 涨（同一进程，加载后常驻 1.57 GB，缓存上限 512 MB）：峰值 B=1 2.57 GB、B=4 3.11、B=8 3.68、B=16 4.80。
@@ -513,7 +476,7 @@ GPU 忙闲全程 96–97 %。打包能拿 −20～25 %（0.106 → 0.080），B�
 28 层约 1.8 GB）和头的 logits（[2B·T_max, 8, 1025] fp32，B=16 约 100 MB）。B=4–8 多用 0.5–1.1 GB 就到平台，B=16 再多 1.1 GB
 换不到速度，所以分桶大小定 4–8。
 
-### 17. 第三轮：codec 瘦身、分句续接、文本规整
+### 17. 第三轮：codec 瘦身、分句续接、text normalization
 
 **codec 瘦身**（`omnivoice_mlx/codec.py` 重写）：解码只要 quantizer + fc2 + acoustic_decoder（90 MB fp32），
 以前却把 806 MB 的整个 tokenizer（含 HuBERT 编码分支）fp32 全装进来。现在：解码分支单独装、fp16；编码分支只在
@@ -538,7 +501,7 @@ wav2vec / config / codec_ops，6 个文件，MIT，改动都标了 `# vendored:`
 transformers / torch / mlx_audio。运行时依赖就这五个；`mlx-audio` 只剩 `bench/bench_mlxaudio.py` 基线对比在用。
 装了别的 transformers 版本的宿主项目不再冲突。
 
-**文本规整（`omnivoice_mlx/textnorm.py` + `omnivoice_mlx/ttstext.py`）**：`ttstext.py` 做改写（`markdown-it`
+**text normalization（`omnivoice_mlx/textnorm.py` + `omnivoice_mlx/ttstext.py`）**：`ttstext.py` 做改写（`markdown-it`
 丢掉不该念的、`wetext` 管数字、外加下面这批手工修补），`textnorm.py` 在它外面按官方
 `normalize_text` 的做法保护 `[laughter]` 标签和拼音声调标记。34 句（年份、数量、小数、百分比、负数、金额、温度、时间、日期、
 电话、序号、分数、英文缩写、单位 + 4 句对照），每句三种输入各合成一次同种子 → 同一个 ASR 回读（关掉 ASR 自己的
@@ -576,13 +539,13 @@ transformers / torch / mlx_audio。运行时依赖就这五个；`mlx-audio` 只
 
 前面所有「官方」基准都是 torch CPU fp32（`parity_ref.py` 写死 `device_map="cpu"`），一直没量过 MPS。
 `bench/bench_ref_device.py` 一个进程里按 (设备 × 精度 × 步数) 轮转交错，3 句 × 3 轮中位数，计时口径同 `bench.py`
-（synth = 去掩码 + codec 解码，不含后处理），MPS 是异步队列，所以每段计时都在 `torch.mps.synchronize()` 之后停表。
+（synth = unmask + codec 解码，不含后处理），MPS 是异步队列，所以每段计时都在 `torch.mps.synchronize()` 之后停表。
 **故意不设 `PYTORCH_ENABLE_MPS_FALLBACK`**：不支持的算子必须抛错，不能悄悄回落 CPU 假装是 MPS 的数。全程没抛错。
 
 两点前提：官方加载器在 MPS 上把 Higgs codec 强制留在 CPU（`omnivoice/models/omnivoice.py:361`，tokenizer 有输出通道
 > 65536 的卷积，MPS 不支持），所以 MPS 行的 decode 列按构造就是 CPU 时间（86–243 ms）；纯 GPU 的对比看 unmask 列。
 
-fp32，CPU vs MPS 同进程交错（合并 RTF = 总(去掩码 + 解码) / 总时长）：
+fp32，CPU vs MPS 同进程交错（合并 RTF = 总(unmask + 解码) / 总时长）：
 
 | 变体 | ms/step（短/中/长） | RTF 短 | RTF 中 | RTF 长 | RTF 合并 |
 |---|---|---:|---:|---:|---:|
@@ -607,7 +570,7 @@ torch 在 MPS 上 fp16 只比 fp32 快 5 %（MLX 里是 15 %），bf16 慢 29 %�
 同日在同一台机器、同 3 句、同口径背靠背重跑本移植（`--tag mlx-fp16-today` / `mlx-q8-today`，各自独立进程，
 跨进程有 10–40 % 漂移）：
 
-| 栈 | s32 合并 RTF | s32 ms/step（短/中/长） | 推荐档合并 RTF |
+| 栈 | s32 合并 RTF | s32 ms/step（短/中/长） | 默认那组合并 RTF |
 |---|---:|---|---:|
 | torch MPS fp16 | 1.136 | 83 / 94 / 126 | — |
 | torch MPS fp32 | 0.980–1.195 | 71–87 / 85–100 / 115–136 | — |
@@ -615,33 +578,33 @@ torch 在 MPS 上 fp16 只比 fp32 快 5 %（MLX 里是 15 %），bf16 慢 29 %�
 | **本移植 MLX q8+fp16** | 0.225 | 15.4 / 16.9 / 29.6 | **0.118**（s16-kv8-ue3） |
 
 **同精度同步数（fp16、32 步）本移植快 5.0 倍，每步 126 → 29.6 ms（长句）；加上算法层的 16 步 + kv8 + ue3，
-对 MPS 最好档是 9.6 倍（1.136 → 0.118）。** 8 步档同理：MPS 0.385 vs MLX 0.063，6.1 倍。
+对 MPS 最快的一组是 9.6 倍（1.136 → 0.118）。** 8 步同理：MPS 0.385 vs MLX 0.063，6.1 倍。
 第 12 / 13 节的结论不变：差距在每步的固定开销（MLX 28 层 ~770 个 kernel 就发完，torch MPS 每步多花 4–5 倍的调度），
 不是算力。
 
 注：第 1 节表里 fp16 s32 的 0.409 是早期代码路径的数，今天同口径重测是 0.227（每步 48.7 → 29.6 ms），
-中间几节的 fast path / 打包改动把它提了近 2 倍；第 12 节的推荐档 0.106 与今天的 0.118 在漂移内。
+中间几节的 fast path / batch 改动把它提了近 2 倍；第 12 节的 0.106 与今天的 0.118 在漂移内。
 
 ## 没做 / 想过不值得
 
-- **流式**：架构上没有（NAR，整句一起去掩码），首包 = 整句耗时。s6-kv6 下 7 字句 130 ms、34 字句 224 ms，
+- **流式**：架构上没有（NAR，整句一起 unmask），首包 = 整句耗时。s6-kv6 下 7 字句 130 ms、34 字句 224 ms，
   这已经是"首包"。分句并行（第 3 节 / 第 9 节）能压吞吐，压不了首包。
-- **`mx.compile`**：每步 ~770 个 kernel 里可融合的只有 silu×up、残差加、Gumbel 那几个逐元素链，估计 ≤ 5 %，而按段切片的
+- **`mx.compile`**：每步 ~770 个 kernel 里可融合的只有 silu×up、残差加、Gumbel 那几个 elementwise 链，估计 ≤ 5 %，而按段切片的
   Python 整数会被烤进图里要按 (P, T) 重 trace，没做。固定开销的真解是更少的 kernel（自定义 Metal 融合层），工作量大。
-- **CFG 截断 / 置信度阈值 / 4 步**：都试了，掉声纹或不提速（第 4、8 节）。
+- **CFG 截断 / 置信度阈值 / 4 步**：都试了，掉 speaker similarity 或不提速（第 4、8 节）。
 - 只测了中文单音色克隆；voice design（`instruct`）和其他语言按官方 prompt 格式接了但没有评。
 
 ## 复现
 
-推荐档的权重也传了一份现成的（8-bit g64 + fp16，829 MB，CC-BY-NC）：
+默认那份权重也传了一份现成的（8-bit g64 + fp16，829 MB，CC-BY-NC）：
 `hf download remember2015/omnivoice-mlx-q8-fp16 --local-dir models/mlx-q8-fp16`，codec 仍要从上游那份拿（见那边的说明）。
 从原版自己转：
 
 ```
 uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -r requirements.txt   # 运行时 5 个包
 uv pip install --python .venv/bin/python -r requirements-bench.txt                            # 基准另加 mlx-audio 等
-huggingface-cli download k2-fsa/OmniVoice --local-dir models/k2-fsa-OmniVoice                 # 权重 CC-BY-NC，见「许可」
-.venv/bin/python scripts/convert.py --out models/mlx-q8-fp16 --dtype float16 --bits 8         # 推荐档
+huggingface-cli download k2-fsa/OmniVoice --local-dir models/k2-fsa-OmniVoice   # 原版，各 mlx 目录的 audio_tokenizer / tokenizer 软链指向它
+.venv/bin/python scripts/convert.py --out models/mlx-q8-fp16 --dtype float16 --bits 8         # 默认那份
 .venv/bin/python scripts/convert.py --out models/mlx-q4-all --dtype float16 --bits 4 --quantize-embed --quantize-heads
 
 export OMNIVOICE_REF_WAV=assets/my-voice.wav        # 自己的 3–4 s 干净单声道录音
@@ -651,27 +614,11 @@ bench/benchlock.sh -- .venv/bin/python bench/bench.py --tag demo --model models/
 .venv/bin/python bench/test_thread.py                       # 第一次生成在工作线程也不炸（MLX 跨线程懒数组）
 ```
 
-质量那三个指标要你自己的回读 / 声纹 / MOS 模型，见上面「方法」。
+质量那三个指标要你自己的 ASR / speaker / MOS 模型，见上面「方法」。
 
 官方真值：`uv venv --python 3.12 .venv-ref && uv pip install --python .venv-ref/bin/python torch==2.8.0 torchaudio==2.8.0 omnivoice soundfile`，
 `.venv-ref/bin/python bench/parity_ref.py && .venv/bin/python bench/parity_mlx.py --dtype float32`。
 
-用法：
-
-```python
-from omnivoice_mlx import OmniVoiceTTS, SamplerConfig
-tts = OmniVoiceTTS("models/mlx-q8-fp16")
-voice = tts.make_prompt("assets/my-voice.wav", "它念的那句话，标点照写。")
-r = tts.generate("今天天气不错，我们出去走走吧。", voice, language="zh")   # 默认 SamplerConfig() = 16 步 + kv8 + uncond 每 3 步；官方采样 SamplerConfig(32, cache_refresh=0, uncond_every=1)
-# r.audio: float32 24 kHz；r.rtf；tts.generate_batch([...]) 多句打包；tts.generate_long(paragraph) 官方分块路径
-```
-
 ## 许可
 
-代码 Apache-2.0（`LICENSE`、`NOTICE`）。这是对 [k2-fsa/OmniVoice](https://github.com/k2-fsa/OmniVoice) 的移植，
-上游代码同样是 Apache-2.0。`omnivoice_mlx/higgs/` 从 [mlx-audio](https://github.com/Blaizzy/mlx-audio) vendor 而来，
-MIT，全文在 `THIRD-PARTY-LICENSES.md`。
-
-**权重不在这个仓库里，也不归这个许可管。** 官方说明：代码 Apache-2.0，预训练权重 CC-BY-NC（训练数据里有 Emilia
-之类的约束）。`scripts/convert.py` 转出来的任何 MLX 权重都是它的衍生物，同样 CC-BY-NC：非商用、要署名。想商用就别用
-这套权重。
+见 [../README.md](../README.md#许可)。代码 Apache-2.0，权重 CC-BY-NC。
