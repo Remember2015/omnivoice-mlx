@@ -138,7 +138,7 @@ codec vendor 进 `omnivoice_mlx/higgs/`（6 个文件，MIT），编码 token �
 - 最终实现（`omnivoice_mlx/ttstext.py`）：markdown-it 去掉不该念的，wetext 处理数字，前后各补一层修正上述形状。
   `generate(normalize=True)` 才启用，因为它需要 markdown-it-py 和 wetext，而这个包的运行时只有五个依赖。
 
-## 11. 与 mlx-audio 的移植对比
+## 11. 与 mlx-audio 的对比
 
 | | 每步 ms（短/中/长） | RTF 32 步 |
 |---|---|---:|
@@ -146,7 +146,7 @@ codec vendor 进 `omnivoice_mlx/higgs/`（6 个文件，MIT），编码 token �
 | 本移植 bf16 | 35.8 / 38.3 / 56.9 | 0.469 |
 | 本移植 fp16 | 31.6 / 33.9 / 48.7 | 0.409 |
 
-## 12. 官方实现在 MPS 上（2026-09-18）
+## 12. 与官方 torch 的对比（CPU / MPS）
 
 `bench/bench_ref_device.py`，MPS 计时前 `torch.mps.synchronize()`。未设 `PYTORCH_ENABLE_MPS_FALLBACK`，
 全程没有算子回落 CPU；codec 是官方在 MPS 上强制留在 CPU 的。
