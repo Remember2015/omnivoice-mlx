@@ -104,24 +104,28 @@ B≥4 之后不再提升，再大只是多占内存；交互式场景用不上�
 | 39 | 78 | 16.0 ms | 9.0 | 7.4 | 0.8 | 1.0 |
 | 126 | 252 | 33.4 | 16.9 | 17.7 | 1.5 | 2.5 |
 
-- 主线程 1–2.5 ms，不是瓶颈。四个 8-bit GEMM 占一步的 67 %（T=126 时 77 %）。
-- GPU 占用率 98–99 %，GEMM 速率 5.9 TFLOPS（峰值 13.6 的 43 %），长块 7.1（52 %）。
-- 做过但没有收益：qkv / gate_up 沿 N 拼 GEMM + cond/uncond 排 batch-2 + 单次带 mask 的 SDPA（16.9 vs 17.3 ms/step，
-  噪声内）；`mx.compile` 融合 elementwise 链（噪声内）；头 GEMM 改 fp16（UTMOS 2.794 vs 2.835，**弃**）。
-  CFG 三次 log_softmax 合一次是代数恒等，~1 %。
-- **自定义 Metal GEMM 写了两代，性能都不及 MLX 内置的**：GEMV 式（`kernels.py`）慢 1.3–5 倍；simdgroup 版
-  （`kernels_sg.py`，扫了 440 种 tile 组合）只在 M ≤ 80 且 N ≥ 4096 快 1.05–1.3×，其余慢 10–15 %，端到端只有
-  7 字句快 6 %。代码留着（`custom_gemm=True` 启用），默认不用。
-- MLX 的量化 GEMM：mma 已跑满峰值的 55–75 %，唯一的浪费是把 M 补到 32（M=32 → 33 时 56 → 90 µs）。
-  单句延迟在算子层已无空间。
+四个 8-bit GEMM 占一步的 67 %（T=126 时 77 %）。GPU 占用率 98–99 %，GEMM 速率 5.9 TFLOPS（峰值 13.6 的 43 %），
+长块 7.1（52 %）。
+
+试过的改动：
+
+| 改动 | 结果 |
+|---|---|
+| qkv / gate_up 沿 N 拼 GEMM、cond/uncond 排 batch-2、单次带 mask 的 SDPA | 16.9 vs 17.3 ms/step，噪声内 |
+| `mx.compile` 融合 elementwise 链 | 噪声内 |
+| 头 GEMM 改 fp16 | UTMOS 2.794 vs 2.835，弃 |
+| CFG 三次 log_softmax 合一次 | 代数恒等，~1 % |
+| 自定义 Metal GEMM，GEMV 式（`kernels.py`） | 慢 1.3–5 倍 |
+| 自定义 Metal GEMM，simdgroup（`kernels_sg.py`，扫了 440 种 tile 组合） | M ≤ 80 且 N ≥ 4096 快 1.05–1.3×，其余慢 10–15 %；端到端只有 7 字句快 6 %，默认不用 |
+
+MLX 的量化 GEMM mma 已跑满峰值的 55–75 %，唯一的浪费是把 M 补到 32（M=32 → 33 时 56 → 90 µs）。
+单句延迟在算子层已无空间。
 
 ## 9. codec 瘦身
 
-解码只要 quantizer + fc2 + acoustic_decoder，以前却装整个 806 MB 的 tokenizer。改成解码分支单独装 fp16
-（44 MB，SNR 59 dB）、编码分支在 `make_prompt` 时懒加载并可释放后，常驻 1.57 → 0.87 GB。
-
-codec vendor 进 `omnivoice_mlx/higgs/`（6 个文件，MIT），编码 token 与解码波形与 mlx-audio 逐位相同。
-最小 venv（五个包）能跑通，进程里没有 transformers / torch / mlx_audio。
+- 只装解码分支（fp16，44 MB，SNR 59 dB），编码分支在 `make_prompt` 时懒加载、可释放：常驻 1.57 → 0.87 GB。
+  原来装的是整个 806 MB 的 tokenizer。
+- codec vendor 进 `omnivoice_mlx/higgs/`（6 个文件，MIT），输出与 mlx-audio 逐位相同；运行时不再需要 transformers。
 
 ## 10. text normalization
 
