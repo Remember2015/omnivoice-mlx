@@ -102,9 +102,9 @@ docs/                 # 研究记录
 
 ## 许可
 
-代码 Apache-2.0（`LICENSE`、`NOTICE`），与上游一致。`omnivoice_mlx/higgs/` vendor 自
-[mlx-audio](https://github.com/Blaizzy/mlx-audio)，MIT，全文见 `THIRD-PARTY-LICENSES.md`。
-
-**权重不归这个许可管。** k2-fsa 代码 Apache-2.0，预训练权重 CC-BY-NC（训练数据约束）。
-`scripts/convert.py` 的产物和上面那份 HF 权重都是其衍生物，同样非商用、需署名。
-Higgs codec 权重另有 Boson Higgs Audio 2 Community License，故本仓库与那份 HF 权重都不重分发。
+| | |
+|---|---|
+| 本仓库代码 | Apache-2.0，同上游（`LICENSE`、`NOTICE`） |
+| `omnivoice_mlx/higgs/` | MIT，vendor 自 [mlx-audio](https://github.com/Blaizzy/mlx-audio)（`THIRD-PARTY-LICENSES.md`） |
+| 预训练权重及其衍生物（`convert.py` 的产物、HF 上那份） | **CC-BY-NC**，非商用、需署名 |
+| Higgs codec 权重 | Boson Higgs Audio 2 Community License，本仓库和 HF 那份都不带 |

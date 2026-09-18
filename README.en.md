@@ -105,11 +105,9 @@ docs/                 # the research log
 
 ## Licence
 
-The code is Apache-2.0 (`LICENSE`, `NOTICE`), following upstream. `omnivoice_mlx/higgs/` is vendored from
-[mlx-audio](https://github.com/Blaizzy/mlx-audio) under MIT; the full text is in `THIRD-PARTY-LICENSES.md`.
-
-**The weights are not covered by that licence.** k2-fsa releases the code under Apache-2.0 and the pre-trained
-weights under CC-BY-NC, because of constraints in the training data. Whatever `scripts/convert.py` produces, and the
-HF checkpoint above, are derivatives of those weights and carry the same terms: non-commercial, with attribution.
-The Higgs codec weights are under the Boson Higgs Audio 2 Community License, which is why neither this repository
-nor that checkpoint redistributes them.
+| | |
+|---|---|
+| this repository's code | Apache-2.0, following upstream (`LICENSE`, `NOTICE`) |
+| `omnivoice_mlx/higgs/` | MIT, vendored from [mlx-audio](https://github.com/Blaizzy/mlx-audio) (`THIRD-PARTY-LICENSES.md`) |
+| pre-trained weights and derivatives (`convert.py` output, the HF checkpoint) | **CC-BY-NC**, non-commercial, attribution required |
+| Higgs codec weights | Boson Higgs Audio 2 Community License; shipped by neither this repo nor that checkpoint |
