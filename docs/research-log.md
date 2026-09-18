@@ -10,7 +10,7 @@ fp32 下 8 步确定性生成逐 token 与官方 100 % 一致，解码后波形�
 
 bf16 / fp16 只有 15–25 % token 一致，所以精度的影响只看 CER / speaker similarity / UTMOS。
 
-## 2. 精度与量化：fp16 是关键，量化只省内存
+## 2. 精度与量化
 
 | 权重 | 激活 | 常驻 | 权重文件 | 32 步 ms/step（短/中/长） | RTF 32 步 |
 |---|---|---:|---:|---|---:|
@@ -25,7 +25,7 @@ bf16 / fp16 只有 15–25 % token 一致，所以精度的影响只看 CER / sp
 - 每步约 15 ms 固定开销（行长 198 → 254 只多 7 %，254 → 391 多 44 %）。
 - 默认取 8-bit + fp16。
 
-## 3. 三种加速采样的尝试：只有 KV cache 可用
+## 3. 采样：KV cache、CFG 截断、置信度阈值
 
 fp16，16 个变体。
 
@@ -35,7 +35,7 @@ fp16，16 个变体。
 | CFG 截断 | 后半步不跑 uncond 分支 | 省 12–18 %，但 speaker similarity 掉 0.05–0.08（0.75 → 0.67），最低 0.52，还出错字。**弃** |
 | 置信度阈值提前揭示 | 每步把置信度超阈值的位提前定下来 | 几乎不触发，每步还要两次 `.item()` 同步，反而慢 5–13 %。**弃** |
 
-## 4. 步数：16 步与 32 步等效，8 步自然度下降，6 步是下限
+## 4. 步数
 
 8-bit + fp16，质量 n = 60。
 
@@ -55,7 +55,7 @@ fp16，16 个变体。
 - 4 步相似度下降 0.03–0.04，并出现整句错误。论文的步数消融（英文 WER 8 步翻倍）在这批中文短句上没出现。
   单句 RTF 下限约 0.06。
 
-## 5. 无条件分支隔步重算：RTF 降 20 %，三个指标不变
+## 5. 无条件分支隔步重算
 
 `uncond_every=n`：每 n 步重算一次无条件分支，中间的步复用上次的 log-prob。
 
@@ -71,7 +71,7 @@ fp16，16 个变体。
 每 3 步算一次：行长 142 → 110，三个指标与基线同。
 **默认 `SamplerConfig(16, cache_refresh=8, uncond_every=3)`，RTF 0.106。**
 
-## 6. 吞吐：多句 batch B=4–8 快 25 %
+## 6. 多句 batch
 
 20 句集按 B 句一组走 `generate_batch`。
 
@@ -88,7 +88,7 @@ B≥4 之后不再提升，再大只是多占内存；交互式场景用不上�
 **MLX 的缓冲区缓存默认无上限**，大 batch 之后会把后续分配拖慢（连 B=1 都从 0.107 退到 0.162）。
 `mx.set_cache_limit(512 MB)` 已写进 `OmniVoiceTTS.__init__`，不设就量不出上面这张表。
 
-## 7. 长文本和假流式
+## 7. 长文本与假流式
 
 - **长文本**（`generate_long`）：304 字（估 46 s）切 4 块，s8-kv4 顺序 0.057、chunk batch 0.053。
   chunk 并行只再省 6–8 %，每步已经 700+ token。整段 2.5 s 合成完。
@@ -97,7 +97,7 @@ B≥4 之后不再提升，再大只是多占内存；交互式场景用不上�
 - **分句续接（负结果）**：把上一句生成的 token 接进参考。UTMOS 2.949 → **2.653**（最低 1.29），还慢 10 %。
   `generate_stream(continuity=True)` 才启用。
 
-## 8. 算子层已经没有余地
+## 8. 算子层
 
 | T | 行 | 一步 GPU 耗时 | 28 层注意力 | 28 层 MLP | 头 + CFG + 采样 | 主线程构图 |
 |---:|---:|---:|---:|---:|---:|---:|
@@ -115,15 +115,15 @@ B≥4 之后不再提升，再大只是多占内存；交互式场景用不上�
 - MLX 的量化 GEMM：mma 已跑满峰值的 55–75 %，唯一的浪费是把 M 补到 32（M=32 → 33 时 56 → 90 µs）。
   单句延迟在算子层已无空间。
 
-## 9. codec 瘦身：常驻 1.57 → 0.87 GB，同时去掉 transformers 依赖
+## 9. codec 瘦身
 
 解码只要 quantizer + fc2 + acoustic_decoder，以前却装整个 806 MB 的 tokenizer。改成解码分支单独装 fp16
-（44 MB，SNR 59 dB），编码分支只在 `make_prompt` 时懒加载、可释放。
+（44 MB，SNR 59 dB）、编码分支在 `make_prompt` 时懒加载并可释放后，常驻 1.57 → 0.87 GB。
 
 codec vendor 进 `omnivoice_mlx/higgs/`（6 个文件，MIT），编码 token 与解码波形与 mlx-audio 逐位相同。
 最小 venv（五个包）能跑通，进程里没有 transformers / torch / mlx_audio。
 
-## 10. text normalization：CER 从 7.09 % 降到 0.33 %
+## 10. text normalization
 
 34 句覆盖年份、小数、百分比、金额、温度、时间、日期、电话、分数、单位。「底噪」是直接合成手写口语形式的结果。
 
@@ -138,7 +138,7 @@ codec vendor 进 `omnivoice_mlx/higgs/`（6 个文件，MIT），编码 token �
 - 最终实现（`omnivoice_mlx/ttstext.py`）：markdown-it 去掉不该念的，wetext 处理数字，前后各补一层修正上述形状。
   `generate(normalize=True)` 才启用，因为它需要 markdown-it-py 和 wetext，而这个包的运行时只有五个依赖。
 
-## 11. 对比 mlx-audio 的移植：每步快 26–44 %
+## 11. 与 mlx-audio 的移植对比
 
 | | 每步 ms（短/中/长） | RTF 32 步 |
 |---|---|---:|
@@ -146,7 +146,7 @@ codec vendor 进 `omnivoice_mlx/higgs/`（6 个文件，MIT），编码 token �
 | 本移植 bf16 | 35.8 / 38.3 / 56.9 | 0.469 |
 | 本移植 fp16 | 31.6 / 33.9 / 48.7 | 0.409 |
 
-## 12. 官方 torch 在 MPS 上：能跑，本移植仍快 5 倍（2026-09-18）
+## 12. 官方实现在 MPS 上（2026-09-18）
 
 `bench/bench_ref_device.py`，MPS 计时前 `torch.mps.synchronize()`。未设 `PYTORCH_ENABLE_MPS_FALLBACK`，
 全程没有算子回落 CPU；codec 是官方在 MPS 上强制留在 CPU 的。
@@ -165,7 +165,7 @@ codec vendor 进 `omnivoice_mlx/higgs/`（6 个文件，MIT），编码 token �
   （1.136 → 0.118）。
 - 本移植 fp16 32 步在第 2 节是 0.409，这里同口径重测 0.227，中间的 fast path 和 batch 改动提了近 2 倍。
 
-## 没做 / 想过不值得
+## 没做
 
 - **真流式**：架构上没有（NAR，整句一起 unmask），首包 = 整句耗时。
 - **split-K 量化 GEMM**：多一次 kernel 启动（10–14 µs）就把收益抵掉了。
