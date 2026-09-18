@@ -196,8 +196,8 @@ export OMNIVOICE_REF_WAV=assets/my-voice.wav      # 自己的 3–4 s 干净单�
 export OMNIVOICE_REF_TEXT="它念的那句话，标点照写。"
 ```
 
-计时一律 `bench/benchlock.sh -- …`（排他锁 + 等空载）。变体名 `s<步数>[-kv<n>][-ue<n>]`，对应上面各表的三列。`uncond_every` 的默认值是 3，所以表里 uncond 写
-「每步」的行要显式加 `-ue1`。
+计时一律 `bench/benchlock.sh -- …`（排他锁 + 等空载）。变体名 `s<步数>[-kv<n>][-ue<n>]`，对应上面各表的三列；
+`uncond_every` 的默认值是 3，所以表里 uncond 写「每步」的行要显式加 `-ue1`。
 
 | 节 | 命令 |
 |---|---|
