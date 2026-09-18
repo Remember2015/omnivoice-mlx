@@ -96,11 +96,9 @@ omnivoice_mlx/
 ├── kernels*.py       # 自定义 Metal GEMM，默认关
 └── higgs/            # tokenizer，vendor 自 mlx-audio（MIT），逐位一致
 scripts/convert.py    # 导出 MLX 权重目录
-bench/                # parity_*（对官方逐 token 对拍）、bench*（计时）、benchlock.sh（排他锁 + 等空载）
+bench/                # parity_*（对官方逐 token 对拍）、bench*（计时，同进程交错）、benchlock.sh（排他锁 + 等空载）
 docs/                 # 研究记录
 ```
-
-计时走 `bench/benchlock.sh`，绝对值随负载漂 10–40 %。
 
 ## 许可
 

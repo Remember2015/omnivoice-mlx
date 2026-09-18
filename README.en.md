@@ -99,11 +99,9 @@ omnivoice_mlx/
 ├── kernels*.py       # custom Metal GEMM, off by default
 └── higgs/            # tokenizer, vendored from mlx-audio (MIT), bit-identical
 scripts/convert.py    # writes MLX weight directories
-bench/                # parity_* (token-for-token vs the official torch), bench* (timing), benchlock.sh
+bench/                # parity_* (token-for-token vs official), bench* (timing, interleaved), benchlock.sh (lock + idle wait)
 docs/                 # the research log
 ```
-
-Timing runs go through `bench/benchlock.sh`; absolute numbers drift 10–40 % with load.
 
 ## Licence
 
