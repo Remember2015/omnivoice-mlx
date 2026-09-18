@@ -85,14 +85,22 @@ export OMNIVOICE_REF_TEXT="它念的那句话，标点照写。"
 ## 目录
 
 ```
-omnivoice_mlx/     backbone / model / sampler / pipeline / codec / stream / textnorm
-  higgs/           Higgs-audio v2 tokenizer，vendor 自 mlx-audio（MIT），逐位一致
-scripts/convert.py 导出 MLX 权重目录
-bench/             parity_*（对官方逐 token 对拍）、bench*（计时，同进程交错）、benchlock.sh（排他锁 + 等空载）
-docs/              研究记录
+omnivoice_mlx/
+├── backbone.py       # Qwen3 双向主干，一行里按 Segment 打包 cond / uncond / 多句
+├── model.py          # 8 码本嵌入 + 8 个头
+├── sampler.py        # 去掩码循环
+├── pipeline.py       # 参考音、prompt、解码、后处理
+├── codec.py          # Higgs 编解码，解码分支可单独加载
+├── stream.py         # 分句预生成
+├── textnorm.py       # 文本规整，惰性 import
+├── kernels*.py       # 自定义 Metal GEMM，默认关
+└── higgs/            # tokenizer，vendor 自 mlx-audio（MIT），逐位一致
+scripts/convert.py    # 导出 MLX 权重目录
+bench/                # parity_*（对官方逐 token 对拍）、bench*（计时）、benchlock.sh（排他锁 + 等空载）
+docs/                 # 研究记录
 ```
 
-计时一律走 `bench/benchlock.sh`：绝对值随负载漂 10–40 %，只有同进程交错的数可比。
+计时走 `bench/benchlock.sh`，绝对值随负载漂 10–40 %。
 
 ## 许可
 

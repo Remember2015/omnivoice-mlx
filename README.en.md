@@ -88,16 +88,22 @@ export OMNIVOICE_REF_TEXT="what the clip says, punctuation included."
 ## Layout
 
 ```
-omnivoice_mlx/     backbone / model / sampler / pipeline / codec / stream / textnorm
-  higgs/           Higgs-audio v2 tokenizer, vendored from mlx-audio (MIT), bit-identical
-scripts/convert.py writes MLX weight directories
-bench/             parity_* (token-for-token against the official torch), bench* (timing, interleaved in one
-                   process), benchlock.sh (exclusive lock + wait for an idle machine)
-docs/              the research log
+omnivoice_mlx/
+├── backbone.py       # Qwen3 bidirectional trunk, cond / uncond / batch packed per row
+├── model.py          # 8 codebook embeddings + 8 heads
+├── sampler.py        # the unmasking loop
+├── pipeline.py       # reference audio, prompt, decode, post-processing
+├── codec.py          # Higgs codec, decode branch loadable on its own
+├── stream.py         # clause-ahead synthesis
+├── textnorm.py       # text normalisation, imported lazily
+├── kernels*.py       # custom Metal GEMM, off by default
+└── higgs/            # tokenizer, vendored from mlx-audio (MIT), bit-identical
+scripts/convert.py    # writes MLX weight directories
+bench/                # parity_* (token-for-token vs the official torch), bench* (timing), benchlock.sh
+docs/                 # the research log
 ```
 
-Every timing run goes through `bench/benchlock.sh`. Absolute numbers drift 10–40 % with load on this machine; only
-the interleaved in-process ones compare.
+Timing runs go through `bench/benchlock.sh`; absolute numbers drift 10–40 % with load.
 
 ## Licence
 
