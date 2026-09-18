@@ -13,7 +13,6 @@ transformers, and in fp32 it matches the official implementation token for token
 | this port | MLX | GPU | 8bit+fp16 | 32 | 0.381 | 0.25 | 0.5–1.0 s | |
 | **this port** | **MLX** | **GPU** | **8bit+fp16** | **16** | **0.106** | **≈0.08** | **0.23–0.44 s** | **default** |
 | this port | MLX | GPU | 8bit+fp16 | 16 | 0.080 | — | — | batched B=4–8 |
-| this port | MLX | GPU | 8bit+fp16 | 8 | 0.075 | 0.057 | 0.16–0.32 s | |
 
 M2 Max 12-core CPU / 38-core GPU / 32 GB, macOS 26.6, MLX 0.32.2. Method, ablations and dead ends are in
 [docs/research-log.md](docs/research-log.md) (Chinese).

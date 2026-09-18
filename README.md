@@ -13,7 +13,6 @@ fp32 下与官方实现逐 token 一致。
 | 本项目 | MLX | GPU | 8bit+fp16 | 32 | 0.381 | 0.25 | 0.5–1.0 s | |
 | **本项目** | **MLX** | **GPU** | **8bit+fp16** | **16** | **0.106** | **≈0.08** | **0.23–0.44 s** | **默认** |
 | 本项目 | MLX | GPU | 8bit+fp16 | 16 | 0.080 | — | — | batch B=4–8 |
-| 本项目 | MLX | GPU | 8bit+fp16 | 8 | 0.075 | 0.057 | 0.16–0.32 s | |
 
 M2 Max 12 核 / 38 核 GPU / 32 GB，macOS 26.6，MLX 0.32.2。测量方法、消融和没走通的尝试见 [docs/research-log.md](docs/research-log.md)。
 
