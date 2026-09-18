@@ -2,7 +2,7 @@
 
 测试环境：M2 Max（12 核 CPU / 38 核 GPU / 32 GB），macOS 26.6，MLX 0.32.2。
 RTF =（unmask + codec 解码）/ 原始时长，同进程交错取 3 轮中位数，绝对值随负载漂 10–40 %；
-CER / speaker similarity / UTMOS 由 Fun-ASR-Nano / CAM++ / UTMOS22-strong 量，换一套模型数值就不一样。
+CER、speaker similarity、UTMOS 分别用 Fun-ASR-Nano、CAM++、UTMOS22-strong 测，换一套模型数值就不一样。
 
 ## 结果
 
@@ -220,8 +220,8 @@ $L $REF bench/bench_ref_device.py --tag ref-dev --devices cpu mps --steps 8 32 -
 官方实现要单独一个 venv：`uv venv --python 3.12 .venv-ref` 后装
 `torch==2.8.0 torchaudio==2.8.0 omnivoice soundfile`。
 
-质量三项（CER / speaker similarity / UTMOS）要你自己的 ASR / speaker / MOS 模型：`bench/bench.py` 把 wav 写进
-`out/<tag>/`，拿去喂你那套，再用 `bench/aggregate.py --quality` 出表。
+CER、speaker similarity 和 UTMOS 需要另外三个模型（ASR、说话人、MOS），本仓库不含。`bench/bench.py` 会把合成的
+wav 写到 `out/<tag>/`，用自己的模型打完分之后，`bench/aggregate.py --quality` 能读回结果出表。
 
 ## 许可
 
