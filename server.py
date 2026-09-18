@@ -164,7 +164,7 @@ def main():
     ap.add_argument("--model", default=str(ROOT / "models/mlx-q8-fp16"))
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8080)
-    ap.add_argument("--max-batch", type=int, default=4, help="1 关掉攒批")
+    ap.add_argument("--max-batch", type=int, default=4, help="1 表示不做 batching")
     ap.add_argument("--steps", type=int, default=None, help="覆盖 SamplerConfig 的 num_steps")
     args = ap.parse_args()
 
