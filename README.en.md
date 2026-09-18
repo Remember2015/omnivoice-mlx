@@ -34,7 +34,7 @@ python -c "from omnivoice_mlx.codec import write_slim_decoder; write_slim_decode
 ```
 
 Decoding reads only that 44 MB branch; the full tokenizer is loaded when encoding a reference clip.
-`scripts/convert.py` also writes bf16, fp16, 4-bit, and a 345 MB build with embeddings and heads quantised too.
+`scripts/convert.py` also writes bf16, fp16 and fp32.
 
 ## Use
 

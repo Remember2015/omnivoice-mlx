@@ -33,7 +33,7 @@ python -c "from omnivoice_mlx.codec import write_slim_decoder; write_slim_decode
 ```
 
 解码只用导出的这 44 MB 分支，完整 tokenizer 只在编码参考音时加载。
-`scripts/convert.py` 还能导出 bf16 / fp16 / 4-bit，以及 embedding 和 head 一起量化的 345 MB 版本。
+`scripts/convert.py` 还能导出 bf16 / fp16 / fp32。
 
 ## 使用
 
