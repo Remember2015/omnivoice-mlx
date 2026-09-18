@@ -85,7 +85,7 @@ omnivoice_mlx/
 ├── codec.py          # Higgs codec
 ├── stream.py         # clause-ahead synthesis
 ├── textnorm.py       # text normalisation
-├── kernels*.py       # custom Metal GEMM, off by default
+├── kernels*.py       # custom Metal GEMM, only wins on some shapes, off by default
 └── higgs/            # tokenizer, vendored from mlx-audio (MIT)
 scripts/convert.py    # writes MLX weight directories
 bench/                # parity, timing, benchlock.sh

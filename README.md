@@ -83,7 +83,7 @@ omnivoice_mlx/
 ├── codec.py          # Higgs codec
 ├── stream.py         # 分句预生成
 ├── textnorm.py       # text normalization
-├── kernels*.py       # 自定义 Metal GEMM，默认关
+├── kernels*.py       # 自定义 Metal GEMM，只在特定形状上更快，默认不用
 └── higgs/            # tokenizer，vendor 自 mlx-audio（MIT）
 scripts/convert.py    # 导出 MLX 权重
 bench/                # parity、计时、benchlock.sh

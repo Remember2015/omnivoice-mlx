@@ -110,7 +110,7 @@ B≥4 之后不再提升，再大只是多占内存；交互式场景用不上�
 - **假流式**（`stream.py`）：按标点切分句，边合成边播放。304 字 → 22 句，s8-kv4 首音频 **165 ms**、s16-kv8 286 ms，
   断流 0 次。代价是分句边界的韵律接不上，总时长比整段合成多 10 %。
 - **分句续接（负结果）**：把上一句自己生成的 token 接进参考，想让韵律跨过分句点。UTMOS 2.949 → **2.653**
-  （最低 1.29），还慢 10 %。模型自己的输出对它而言是分布外数据，默认关。
+  （最低 1.29），还慢 10 %。模型自己的输出对它而言是分布外数据。`generate_stream(continuity=True)` 才启用。
 
 ## 8. 算子层已经没有余地
 
@@ -125,9 +125,9 @@ B≥4 之后不再提升，再大只是多占内存；交互式场景用不上�
 - 做过但没有收益：qkv / gate_up 沿 N 拼 GEMM + cond/uncond 排 batch-2 + 单次带 mask 的 SDPA（16.9 vs 17.3 ms/step，
   噪声内）；`mx.compile` 融合 elementwise 链（噪声内）；头 GEMM 改 fp16（UTMOS 2.794 vs 2.835，**弃**）。
   CFG 三次 log_softmax 合一次是代数恒等，~1 %。
-- **自定义 Metal GEMM 写了两代，都没能超过 MLX**：GEMV 式（`kernels.py`）慢 1.3–5 倍；simdgroup 版（`kernels_sg.py`，扫了 440 种 tile
-  组合）只在 M ≤ 80 且 N ≥ 4096 快 1.05–1.3×，其余慢 10–15 %，端到端只有 7 字句快 6 %。默认关
-  （`custom_gemm=True` 可开）。
+- **自定义 Metal GEMM 写了两代，性能都不及 MLX 内置的**：GEMV 式（`kernels.py`）慢 1.3–5 倍；simdgroup 版
+  （`kernels_sg.py`，扫了 440 种 tile 组合）只在 M ≤ 80 且 N ≥ 4096 快 1.05–1.3×，其余慢 10–15 %，端到端只有
+  7 字句快 6 %。代码留着（`custom_gemm=True` 启用），默认不用。
 - MLX 的量化 GEMM 唯一的结构性浪费是把 M 补到 32（M=32 → 33 时 56 → 90 µs），它的 mma 已经跑满峰值的 55–75 %。
   单句延迟在算子层已无空间，收益只剩算法层（第 4、5 节）和多句 batch。
 
@@ -152,7 +152,8 @@ codec vendor 进 `omnivoice_mlx/higgs/`（6 个文件，MIT），编码 token �
 - 不做规整会丢信息：`-5 度` 念「五度」、`3.5%` 丢「百分之」、`14:30` 念「十四三零」、`1/3` 念「一四三」。
 - 两个现成规整器互有缺口：zh_normalization 把 `3500 台` 念成「三五零零台」、`¥` 念成「U」；wetext 把带空格的
   `2024 年` 按基数读；两边都把 `GPT-4` 念成「GPT 负四」。共 5 种形状，补齐后接近底噪。
-- 最终选 wetext，前面加一层修补（`omnivoice_mlx/ttstext.py`），默认关。
+- 最终实现（`omnivoice_mlx/ttstext.py`）：markdown-it 去掉不该念的，wetext 处理数字，前后各补一层修正上述形状。
+  `generate(normalize=True)` 才启用，因为它需要 markdown-it-py 和 wetext，而这个包的运行时只有五个依赖。
 
 ## 11. 对比 mlx-audio 的移植：每步快 26–44 %
 
