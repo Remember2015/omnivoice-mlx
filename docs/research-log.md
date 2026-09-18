@@ -202,19 +202,37 @@ export OMNIVOICE_REF_TEXT="它念的那句话，标点照写。"
 各节的数据分别来自：
 
 ```bash
-L="bench/benchlock.sh --"                   # 排他锁 + 等空载，每条都要走
-PY=.venv/bin/python; REF=.venv-ref/bin/python
-M=models/mlx-q8-fp16
+lock="bench/benchlock.sh --"        # 排他锁 + 等空载，每条都要走
 
-$L $REF bench/parity_ref.py && $L $PY bench/parity_mlx.py --dtype float32                      # 1 移植正确性
-$L $PY bench/bench_models.py --tag flavours --spec fp16=models/k2-fsa-OmniVoice:float16 q8fp16=$M   # 2 精度与量化
-$L $PY bench/bench.py --tag steps --model $M --runs 3 \
-       --variants s32 s16 s16-kv8-ue1 s16-kv8-ue3 s8-kv4-ue1                                # 3 / 4 / 5 采样
-$L $PY bench/bench_batch.py --tag batch --model $M                                          # 6 多句 batch
-$L $PY bench/bench_long.py --tag long --model $M && $L $PY bench/demo_stream.py             # 7 长文本 / 流式
-$L $PY bench/profile_step.py && $L $PY bench/mm_probe.py && $L $PY bench/gpu_util.py        # 8 算子层
-$L $PY bench/bench_mlxaudio.py --tag mlxaudio                                               # 11 与 mlx-audio（另需 mlx-audio）
-$L $REF bench/bench_ref_device.py --tag ref-dev --devices cpu mps --steps 8 32 --runs 3     # 12 与官方 torch
+# 1 移植正确性
+$lock .venv-ref/bin/python bench/parity_ref.py
+$lock .venv/bin/python bench/parity_mlx.py --dtype float32
+
+# 2 精度与量化
+$lock .venv/bin/python bench/bench_models.py --tag flavours \
+    --spec fp16=models/k2-fsa-OmniVoice:float16 q8fp16=models/mlx-q8-fp16
+
+# 3 / 4 / 5 采样、步数、隔步重算
+$lock .venv/bin/python bench/bench.py --tag steps --model models/mlx-q8-fp16 --runs 3 \
+    --variants s32 s16 s16-kv8-ue1 s16-kv8-ue3 s8-kv4-ue1
+
+# 6 多句 batch
+$lock .venv/bin/python bench/bench_batch.py --tag batch --model models/mlx-q8-fp16
+
+# 7 长文本 / 流式
+$lock .venv/bin/python bench/bench_long.py --tag long --model models/mlx-q8-fp16
+$lock .venv/bin/python bench/demo_stream.py
+
+# 8 算子层
+$lock .venv/bin/python bench/profile_step.py
+$lock .venv/bin/python bench/mm_probe.py
+$lock .venv/bin/python bench/gpu_util.py
+
+# 11 与 mlx-audio（另需装 mlx-audio）
+$lock .venv/bin/python bench/bench_mlxaudio.py --tag mlxaudio
+
+# 12 与官方 torch
+$lock .venv-ref/bin/python bench/bench_ref_device.py --tag ref-dev --devices cpu mps --steps 8 32 --runs 3
 ```
 
 官方实现要单独一个 venv：`uv venv --python 3.12 .venv-ref` 后装
