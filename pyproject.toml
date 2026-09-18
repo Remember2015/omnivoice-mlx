@@ -42,7 +42,7 @@ Upstream = "https://github.com/k2-fsa/OmniVoice"
 packages = ["omnivoice_mlx"]
 
 [tool.hatch.build.targets.sdist]
-include = ["omnivoice_mlx", "bench", "scripts", "README.md", "LICENSE", "NOTICE", "THIRD-PARTY-LICENSES.md"]
+include = ["omnivoice_mlx", "bench", "scripts", "docs", "README.md", "LICENSE", "NOTICE", "THIRD-PARTY-LICENSES.md"]
 
 [tool.ruff]
 line-length = 120
