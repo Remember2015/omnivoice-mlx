@@ -4,6 +4,24 @@
 RTF =（unmask + codec 解码）/ 原始时长，同进程交错取 3 轮中位数，绝对值随负载漂 10–40 %；
 CER / speaker similarity / UTMOS 由 Fun-ASR-Nano / CAM++ / UTMOS22-strong 量，换一套模型数值就不一样。
 
+## 结果
+
+| 对照 | 框架 | 设备 | 精度 | 步数 | RTF 短句 | 整句延迟 |
+|---|---|---|---|---:|---:|---|
+| 官方 | torch | CPU | fp32 | 32 | ≈2–3 | — |
+| 官方 | torch | MPS | fp32 | 32 | 0.98 | — |
+| mlx-audio | MLX | GPU | bf16 | 32 | 0.68 | 1.8–3.4 s |
+
+本项目，8-bit + fp16：
+
+| 步数 | KV 每几步重算 | uncond 每几步重算 | RTF 短句 | 整句延迟 | CER | sim | UTMOS | |
+|---:|---:|---:|---:|---|---:|---:|---:|---|
+| 32 | 每步 | 每步 | 0.381 | 0.5–1.0 s | 0.73 % | 0.746 | 2.826 | |
+| **16** | **8** | **3** | **0.106** | **0.23–0.44 s** | 0.40 % | 0.747 | **2.835** | **默认** |
+| 16 | 8 | 3 | 0.080 | — | — | — | — | batch B=4–8 |
+| 8 | 4 | 每步 | 0.075 | 0.16–0.32 s | 0.40 % | 0.738 | 2.687 | |
+| 6 | 6 | 每步 | 0.060 | 0.13–0.22 s | 0.44 % | 0.729 | 2.532 | |
+
 ## 1. 移植正确性
 
 fp32 下 8 步确定性生成逐 token 与官方 100 % 一致，解码后波形时长和 RMS 也相同。
@@ -84,11 +102,11 @@ B≥4 之后不再提升，再大只是多占内存；交互式场景用不上�
 **MLX 的缓冲区缓存默认无上限**，大 batch 之后会把后续分配拖慢（连 B=1 都从 0.107 退到 0.162）。
 `mx.set_cache_limit(512 MB)` 已写进 `OmniVoiceTTS.__init__`，不设就量不出上面这张表。
 
-## 7. 长文本与假流式
+## 7. 长文本与流式
 
 - **长文本**（`generate_long`）：304 字（估 46 s）切 4 块，8 步 + KV 每 4 步：顺序 0.057、chunk batch 0.053。
   chunk 并行只再省 6–8 %，每步已经 700+ token。整段 2.5 s 合成完。
-- **假流式**（`stream.py`）：按标点切分句，边合成边播放。304 字 → 22 句，首音频 **165 ms**（8 步）/ 286 ms（16 步），
+- **流式**（`stream.py`）：按标点切分句，边合成边播放。304 字 → 22 句，首音频 **165 ms**（8 步）/ 286 ms（16 步），
   断流 0 次。代价是分句边界的韵律接不上，总时长比整段合成多 10 %。
 - **分句续接**（没走通）：把上一句生成的 token 接进参考。UTMOS 2.949 → **2.653**（最低 1.29），还慢 10 %。
   `generate_stream(continuity=True)` 才启用。
@@ -148,7 +166,8 @@ MLX 的量化 GEMM mma 已跑满峰值的 55–75 %，唯一的浪费是把 M �
 ## 12. 与官方 torch 的对比（CPU / MPS）
 
 `bench/bench_ref_device.py`，MPS 计时前 `torch.mps.synchronize()`。未设 `PYTORCH_ENABLE_MPS_FALLBACK`，
-全程没有算子回落 CPU；codec 是官方在 MPS 上强制留在 CPU 的。
+全程没有算子回落 CPU；codec 是官方在 MPS 上强制留在 CPU 的。这一轮两份模型同进程，CPU 那行比单独跑时高
+（上面「结果」里是 ≈2–3）。
 
 | 栈 | 精度 | RTF 32 步 | RTF 8 步 | 每步 ms（短/中/长） |
 |---|---|---:|---:|---|
@@ -184,7 +203,7 @@ export OMNIVOICE_REF_TEXT="它念的那句话，标点照写。"
 | 2 精度与量化 | `bench/bench_models.py --tag flavours --spec fp16=models/k2-fsa-OmniVoice:float16 q8fp16=models/mlx-q8-fp16`（多种权重装进同一进程交错） |
 | 3 采样 / 4 步数 / 5 隔步重算 | `bench/bench.py --tag steps --model models/mlx-q8-fp16 --variants s32 s16 s16-kv8-ue1 s16-kv8-ue3 s8-kv4-ue1 --runs 3` |
 | 6 多句 batch | `bench/bench_batch.py --model models/mlx-q8-fp16 --tag batch` |
-| 7 长文本 / 假流式 | `bench/bench_long.py --tag long --model models/mlx-q8-fp16`、`bench/demo_stream.py --variant s8-kv4` |
+| 7 长文本 / 流式 | `bench/bench_long.py --tag long --model models/mlx-q8-fp16`、`bench/demo_stream.py --variant s8-kv4` |
 | 8 算子层 | `bench/profile_step.py`、`bench/mm_probe.py`、`bench/gpu_util.py --seconds 8`、`bench/test_sg_e2e.py` |
 | 11 与 mlx-audio | `bench/bench_mlxaudio.py --tag mlxaudio`（另需 `mlx-audio`，权重用 `scripts/convert.py` 转 bf16） |
 | 12 与官方 torch | `.venv-ref/bin/python bench/bench_ref_device.py --tag ref-dev --devices cpu mps --steps 8 32 --runs 3` |
