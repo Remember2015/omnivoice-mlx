@@ -1,10 +1,9 @@
 # OmniVoice on MLX
 
+简体中文 | [English](README.en.md)
+
 [k2-fsa/OmniVoice](https://github.com/k2-fsa/OmniVoice)（0.6B，Qwen3 双向主干 + Higgs-audio v2 codec，
 masked-diffusion NAR TTS）的 MLX 移植。推理不依赖 torch / transformers，fp32 下与官方实现逐 token 一致。
-
-> A torch-free MLX port of k2-fsa/OmniVoice for Apple silicon. RTF 0.106 on an M2 Max with 8-bit weights, fp16
-> activations and 16 denoising steps; CER, speaker similarity and UTMOS all match the official 32-step sampler.
 
 | 实现 | 权重 / 激活 | 步数 | RTF 短句 | RTF 长段 | 首包 |
 |---|---|---:|---:|---:|---:|
@@ -22,7 +21,7 @@ M2 Max 12 核 / 38 核 GPU / 32 GB，macOS 26.6，MLX 0.32.2。测法、消融�
 ## 安装
 
 ```bash
-pip install omnivoice-mlx
+pip install git+https://github.com/Remember2015/omnivoice-mlx
 hf download remember2015/omnivoice-mlx-q8-fp16 --local-dir models/mlx-q8-fp16
 ```
 
