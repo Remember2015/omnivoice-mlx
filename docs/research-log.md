@@ -173,6 +173,27 @@ MLX 的量化 GEMM mma 已跑满峰值的 55–75 %，唯一的浪费是把 M �
   fp16 只比 fp32 快 5 %，MLX 里是 15 %。
 - 第 2 节的 fp16 32 步是 0.409，这里同口径是 0.227，中间做了 fast path 和 batch 改动。
 
+## 13. 服务化：单进程 RPS
+
+`server.py`：一个 worker 线程持模型和 GPU，HTTP 线程只排队。MLX 只有一条 GPU stream，而且懒数组不能跨线程求值，
+所以并发只能变成攒批：worker 每次把已经排在队里的请求一起走 `generate_batch`。20 句集，每档压 20 s
+（`bench/bench_rps.py`）：
+
+| 并发 | max_batch | RPS | 音频秒/墙钟秒 | p50 ms | p95 ms | 实际批大小 |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 1 | 2.78 | 9.3 | 367 | 404 | 1.00 |
+| 4 | 1 | 2.69 | 9.0 | 1472 | 1615 | 1.00 |
+| 8 | 1 | 2.71 | 9.0 | 2938 | 3151 | 1.00 |
+| 1 | 4 | 2.88 | 9.6 | 364 | 393 | 1.00 |
+| 4 | 4 | 3.30 | 11.0 | 1193 | 1350 | 2.48 |
+| 8 | 4 | **3.56** | **11.8** | 2193 | 2397 | 3.96 |
+
+- 不攒批时并发加到 8 也还是 2.7 RPS，只是排队变长：GPU 本来就满，多开客户端不产生吞吐。
+- 攒批后 8 并发 3.56 RPS，比单并发高 **24 %**，与第 6 节 B=4–8 拿到的 −25 % 对得上。
+- 并发 2 时批大小仍是 1.00：一个请求在算的时候只来得及排进一个，worker 取到它时队列已空。要在低并发下也攒批
+  得让 worker 等一个时间窗，那是拿延迟换吞吐，没做。
+- 音频秒/墙钟秒 9.3–11.8，即一台 M2 Max 能同时喂 9–11 路实时语音。
+
 ## 复现
 
 ```bash
@@ -223,6 +244,10 @@ $lock .venv/bin/python bench/bench_mlxaudio.py --tag mlxaudio
 
 # 12 与官方 torch
 $lock .venv-ref/bin/python bench/bench_ref_device.py --tag ref-dev --devices cpu mps --steps 8 32 --runs 3
+
+# 13 服务化 RPS：先起 server.py，再压
+.venv/bin/python server.py --model models/mlx-q8-fp16 --port 8123 &
+$lock .venv/bin/python bench/bench_rps.py --url http://127.0.0.1:8123/tts --concurrency 1 2 4 8
 ```
 
 官方实现要单独一个 venv：`uv venv --python 3.12 .venv-ref` 后装

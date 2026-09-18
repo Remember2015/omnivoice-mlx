@@ -87,6 +87,7 @@ omnivoice_mlx/
 ├── textnorm.py       # text normalization
 ├── kernels*.py       # 自定义 Metal GEMM，默认不用
 └── higgs/            # tokenizer，vendor 自 mlx-audio（MIT）
+server.py             # HTTP 服务，单 worker + 动态攒批
 scripts/convert.py    # 导出 MLX 权重
 bench/                # parity、计时、benchlock.sh
 docs/                 # 研究记录
